@@ -20,6 +20,18 @@
    :table table
    :cols cols})
 
+(defn delete [table]
+  {:type :delete
+   :table table})
+
+(defn select [table]
+  {:type :select
+   :table table})
+
+(defn update [table]
+  {:type :update
+   :table table})
+  
 (defn -generate-insert [query]
   (let [cols (:cols query)
         table (:table query)

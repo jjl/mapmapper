@@ -24,3 +24,31 @@
       (let [s1 (s/generate t1)
             e1 "INSERT INTO foo ( \"foo\".\"bar\", \"foo\".\"baz\", \"foo\".\"quux\" ) VALUES ( ? ? ? )"]
         (is (= s1 e1))))))
+
+(deftest select
+  (let [t1 (s/select "foo")]
+    (testing "map generation"
+      (let [e1 {:type :select :table "foo"}]
+        (is (= t1 e1))))
+    (testing "sql generation"
+      (let [s1 (s/generate t1)
+            e1 "not implemented"]
+        (is (= s1 e1))))))
+(deftest update
+  (let [t1 (s/update "foo")]
+    (testing "map generation"
+      (let [e1 {:type :update :table "foo"}]
+        (is (= t1 e1))))
+    (testing "sql generation"
+      (let [s1 (s/generate t1)
+            e1 "not implemented"]
+        (is (= s1 e1))))))
+(deftest delete
+  (let [t1 (s/delete "foo")]
+    (testing "map generation"
+      (let [e1 {:type :delete :table "foo"}]
+        (is (= t1 e1))))
+    (testing "sql generation"
+      (let [s1 (s/generate t1)
+            e1 "not implemented"]
+        (is (= s1 e1))))))
