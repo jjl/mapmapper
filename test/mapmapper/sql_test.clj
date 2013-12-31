@@ -60,7 +60,21 @@
         t7 (-> (s/delete "foo")
                (s/where [:op "in" [[:identifier ["table" "column"]]
                                    [:value 1]
-                                   [:value 2]]]))]
+                                   [:value 2]]]))
+        t8 (-> (s/delete "foo")
+               (s/where [:op "not in" [[:identifier ["table" "column"]]
+                                       [:value 1]
+                                       [:value 2]]]))
+        t9 (-> (s/delete "foo")
+               (s/where [:op "between" [[:identifier ["table" "column"]]
+                                        [:value 1]
+                                        [:value 2]]]))
+        t10 (-> (s/delete "foo")
+                (s/where [:op "between" [[:identifier ["table" "column"]]
+                                         [:value 1]
+                                         [:value 2]]]))]
+
+
     (testing "map generation"
       (let [e1 {:type :delete :table "foo"}
             e2 {:type :delete :table "foo" :where [:value true]}
@@ -82,13 +96,20 @@
             s5 (s/generate t5)
             s6 (s/generate t6)
             s7 (s/generate t7)
+            s8 (s/generate t8)
+            s9 (s/generate t9)
+            s10 (s/generate t10)
             e1 "DELETE FROM foo"
             e2 "DELETE FROM foo WHERE true"
             e3 "DELETE FROM foo WHERE (true and false)"
             e4 "DELETE FROM foo WHERE (1 = \"table\".\"column\")"
             e5 "DELETE FROM foo WHERE (true) ::bool"
             e6 "DELETE FROM foo WHERE bool(true)"
-            e7 "DELETE FROM foo WHERE (\"table\".\"column\" IN (1, 2))"]
+            e7 "DELETE FROM foo WHERE (\"table\".\"column\" in (1, 2))"
+            e8 "DELETE FROM foo WHERE (\"table\".\"column\" not in (1, 2))"
+            e9 "DELETE FROM foo WHERE (\"table\".\"column\" between 1 and 2)"
+            e10 "DELETE FROM foo WHERE (\"table\".\"column\" not between 1 and 2)"]
+            
         (is (= s1 e1))
         (is (= s2 e2))
         (is (= s3 e3))

@@ -57,6 +57,16 @@
        (not (map? item))
        (= (count item) 1)))
 
+(defn -valid-binop-data [item]
+  (and (seq item)
+       (not (map? item))
+       (= (count item) 2)))
+  
+(defn -valid-ternop-data [item]
+  (and (seq item)
+       (not (map? item))
+       (= (count item) 3)))
+
 (defn -maybe-metadata [item]
   (when (and (seq item)
              (= (count item) 1))
@@ -83,14 +93,16 @@
     (throw (Exception. (str "-where-expr: " type)))))
 
 (defn -where-bin-or-multi-op [op args]
-  (if (or (= op "in") ;; REALLY refactor me
-          (= op "not in"))
-    (let [mapped (map -where-expr args)
-          [head & tail] mapped]
-      (str "(" head " IN (" (string/join ", " tail) "))"))
-    (let [mapped (map -where-expr args)
-                 joiner (str " " op " ")]
-             (str "(" (string/join joiner mapped) ")"))))
+  (let [mapped (map -where-expr args)]
+    (cond (or (= op "in") (= op "not in"))
+          (let [[head & tail] mapped]
+            (str "(" head " " op " (" (string/join ", " tail) "))"))
+          (or (= op "between") (= op "not between"))
+          (let [[head lbound ubound] mapped]
+            (str "(" head " " op " " lbound " and " ubound ")"))
+          :default
+          (let [joiner (str " " op " ")]
+            (str "(" (string/join joiner mapped) ")")))))
     
 
 (defn -where-op [[op args & maybe-metadata]]
