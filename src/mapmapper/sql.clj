@@ -10,7 +10,10 @@
   (str \" (string/join "\".\"" pieces) \"))
 
 (defn -generate-placeholders [count]
-  (string/join " " (repeat count "?")))
+  (let [prefix (repeat (dec count) "?,")
+        suffix (when (> count 0) ["?"])
+        combined (concat prefix suffix)]
+    (string/join " " combined)))
 
 (defn -qualified-names [table cols]
   (string/join ", " (map #(-quote-identifier table %) cols)))

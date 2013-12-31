@@ -3,14 +3,14 @@
             [mapmapper.sql :as s]))
 
 (deftest utilities
-  (testing "-generate-placeholdes"
+  (testing "-generate-placeholders"
     (let [g s/-generate-placeholders
           t0 (g 0)
-          t1 (g 4)
-          t2 (g 7)
+          t1 (g 1)
+          t2 (g 4)
           e0 ""
-          e1 "? ? ? ?"
-          e2 "? ? ? ? ? ? ?"]
+          e1 "?"
+          e2 "?, ?, ?, ?"]
       (is (= t0 e0))
       (is (= t1 e1))
       (is (= t2 e2)))))
@@ -22,7 +22,7 @@
         (is (= t1 e1))))
     (testing "sql generation"
       (let [s1 (s/generate t1)
-            e1 "INSERT INTO foo ( \"foo\".\"bar\", \"foo\".\"baz\", \"foo\".\"quux\" ) VALUES ( ? ? ? )"]
+            e1 "INSERT INTO foo ( \"foo\".\"bar\", \"foo\".\"baz\", \"foo\".\"quux\" ) VALUES ( ?, ?, ? )"]
         (is (= s1 e1))))))
 
 (deftest select
