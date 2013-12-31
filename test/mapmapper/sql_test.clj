@@ -34,6 +34,7 @@
       (let [s1 (s/generate t1)
             e1 "not implemented"]
         (is (= s1 e1))))))
+
 (deftest update
   (let [t1 (s/update "foo")]
     (testing "map generation"
@@ -43,12 +44,17 @@
       (let [s1 (s/generate t1)
             e1 "not implemented"]
         (is (= s1 e1))))))
+
 (deftest delete
   (let [t1 (s/delete "foo")]
     (testing "map generation"
-      (let [e1 {:type :delete :table "foo"}]
-        (is (= t1 e1))))
+      (let [e1 {:type :delete :table "foo"}
+            t2 (s/generate {:type :delete
+                            :table "foo"
+                            :where [:op "=" [[:identifier "bar"] [:value 1]]]})]
+        (is (= t1 e1))
+        (is (= t2 "DELETE FROM foo WHERE (\"bar\" = 1)"))))
     (testing "sql generation"
       (let [s1 (s/generate t1)
-            e1 "not implemented"]
+            e1 "DELETE FROM foo"]
         (is (= s1 e1))))))
