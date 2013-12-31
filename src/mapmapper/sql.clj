@@ -79,21 +79,24 @@
              (let [val (first args)]
                (-stringify-value val))
              (throw (Exception. (str "expected value: " val))))
-    :op (-where-op args)))
+    :op (-where-op args)
+    (throw (Exception. (str "-where-expr: " type)))))
 
 (defn -where-op [[op args & maybe-metadata]]
   (let [[func fargs] args
         metadata (-maybe-metadata maybe-metadata)]
-    (condp = op
-      :apply (str func "(" (-where-expr fargs) ")")
-      (condp = (count fargs)
-        1 (let [postfix (get metadata :postfix false)]
-            (if postfix
-              (str "(" (-where-expr (first fargs)) ")" )
-              (str func " " (-where-expr fargs))))
-          (let [mapped (map -where-expr args)
-                joiner (str " " op " ")]
-            (str "(" (string/join joiner mapped) ")"))))))
+    (cond
+     (or (= op :apply)
+         (= op "apply")) (let [mapped (map -where-expr fargs)]
+                           (str func "(" (string/join ", " mapped) ")"))
+         :else (condp = (count args)
+           1 (let [postfix (get metadata :postfix false)]
+               (if postfix
+                 (str "(" (-where-expr (first args)) ") " op)
+                 (str op " " (-where-expr args))))
+           (let [mapped (map -where-expr args)
+                 joiner (str " " op " ")]
+             (str "(" (string/join joiner mapped) ")"))))))
 
 (defn -generate-where [query]
   (let [where (get query :where)]

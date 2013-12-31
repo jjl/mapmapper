@@ -52,7 +52,11 @@
         t3 (-> (s/delete "foo")
                (s/where [:op "and" [[:value true] [:value false]]]))
         t4 (-> (s/delete "foo")
-               (s/where [:op "=" [[:value 1] [:identifier ["table" "column"]]]]))]
+               (s/where [:op "=" [[:value 1] [:identifier ["table" "column"]]]]))
+        t5 (-> (s/delete "foo")
+               (s/where [:op "::bool" [[:value true]] {:postfix true}]))
+        t6 (-> (s/delete "foo")
+               (s/where [:op :apply ["bool" [[:value true]]]]))]
     (testing "map generation"
       (let [e1 {:type :delete :table "foo"}
             e2 {:type :delete :table "foo" :where [:value true]}
@@ -61,21 +65,34 @@
                                                     [:value false]]]}
             e4 {:type :delete :table "foo" :where [:op "="
                                                    [[:value 1]
-                                                    [:identifier ["table" "column"]]]]}]
+                                                    [:identifier ["table" "column"]]]]}
+            e5 {:type :delete :table "foo" :where [:op "::bool"
+                                                   [[:value true]]
+                                                   {:postfix true}]}
+            e6 {:type :delete :table "foo" :where [:op :apply
+                                                   ["bool" [[:value true]]]]}]
         (is (= t1 e1))
         (is (= t2 e2))
         (is (= t3 e3))
         (is (= t4 e4))
+        (is (= t5 e5))
+        (is (= t6 e6))))
     (testing "sql generation"
       (let [s1 (s/generate t1)
             s2 (s/generate t2)
             s3 (s/generate t3)
             s4 (s/generate t4)
+            s5 (s/generate t5)
+            s6 (s/generate t6)
             e1 "DELETE FROM foo"
             e2 "DELETE FROM foo WHERE true"
             e3 "DELETE FROM foo WHERE (true and false)"
-            e4 "DELETE FROM foo WHERE (1 = \"table\".\"column\")"]
+            e4 "DELETE FROM foo WHERE (1 = \"table\".\"column\")"
+            e5 "DELETE FROM foo WHERE (true) ::bool"
+            e6 "DELETE FROM foo WHERE bool(true)"]
         (is (= s1 e1))
         (is (= s2 e2))
         (is (= s3 e3))
-        (is (= s4 e4))))))))
+        (is (= s4 e4))
+        (is (= s5 e5))
+        (is (= s6 e6))))))
