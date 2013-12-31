@@ -169,10 +169,10 @@
 
 (defn -where-bin-or-multi-op [op args]
   (let [mapped (map -where-expr args)]
-    (cond (or (= op "in") (= op "not in"))
+    (cond (is-forced-binop? op)
           (let [[head & tail] mapped]
             (str "(" head " " op " (" (string/join ", " tail) "))"))
-          (or (= op "between") (= op "not between"))
+          (is-forced-ternop? op)
           (let [[head lbound ubound] mapped]
             (str "(" head " " op " " lbound " and " ubound ")"))
           :default
