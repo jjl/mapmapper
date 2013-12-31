@@ -6,11 +6,14 @@
     (concat (mapcat #(vector % item) l-init)
             [l-last])))
 
-(defn is-numeric-type? [item]
+(defn is-numeric? [item]
   (or (instance? java.lang.Long item)
       (instance? java.lang.Integer item)
       (instance? java.lang.Double item)
       (instance? java.lang.Float item)))
 
-(defn is-string-type? [item]
+(defn is-boolean? [item]
+  (instance? java.lang.Boolean item))
+
+(defn is-string? [item]
   (instance? java.lang.String item))

@@ -46,15 +46,36 @@
         (is (= s1 e1))))))
 
 (deftest delete
-  (let [t1 (s/delete "foo")]
+  (let [t1 (s/delete "foo")
+        t2 (-> (s/delete "foo")
+               (s/where [:value true]))
+        t3 (-> (s/delete "foo")
+               (s/where [:op "and" [[:value true] [:value false]]]))
+        t4 (-> (s/delete "foo")
+               (s/where [:op "=" [[:value 1] [:identifier ["table" "column"]]]]))]
     (testing "map generation"
       (let [e1 {:type :delete :table "foo"}
-            t2 (s/generate {:type :delete
-                            :table "foo"
-                            :where [:op "=" [[:identifier "bar"] [:value 1]]]})]
+            e2 {:type :delete :table "foo" :where [:value true]}
+            e3 {:type :delete :table "foo" :where [:op "and"
+                                                   [[:value true]
+                                                    [:value false]]]}
+            e4 {:type :delete :table "foo" :where [:op "="
+                                                   [[:value 1]
+                                                    [:identifier ["table" "column"]]]]}]
         (is (= t1 e1))
-        (is (= t2 "DELETE FROM foo WHERE (\"bar\" = 1)"))))
+        (is (= t2 e2))
+        (is (= t3 e3))
+        (is (= t4 e4))
     (testing "sql generation"
       (let [s1 (s/generate t1)
-            e1 "DELETE FROM foo"]
-        (is (= s1 e1))))))
+            s2 (s/generate t2)
+            s3 (s/generate t3)
+            s4 (s/generate t4)
+            e1 "DELETE FROM foo"
+            e2 "DELETE FROM foo WHERE true"
+            e3 "DELETE FROM foo WHERE (true and false)"
+            e4 "DELETE FROM foo WHERE (1 = \"table\".\"column\")"]
+        (is (= s1 e1))
+        (is (= s2 e2))
+        (is (= s3 e3))
+        (is (= s4 e4))))))))

@@ -41,9 +41,12 @@
 (def where-atom-types
   [:identifier :value :op])
   
- ;; [:identifier "name"]
+(defn where [query w]
+  (assoc query :where w))
+
+ ;; [:identifier ["name" "pieces"]]
  ;; [:value val]
- ;; [:op name args :metadata]
+ ;; [:op name [args] {meta data}]
 
 (defn -valid-where-atom [[head & tail]]
   (and (keyword? head)
@@ -64,13 +67,14 @@
 
 (defn -stringify-value [value]
   (cond
-   (u/is-numeric-type? value) (str value)
-   (u/is-string-type? value) (str \' value \')
+   (u/is-numeric? value) (str value)
+   (u/is-boolean? value) (str value)
+   (u/is-string? value) (str \' value \')
    :default (throw (Exception. (str "don't know how to handle a " (class value))))))
 
 (defn -where-expr [[type & args]]
   (condp = type
-    :identifier (-quote-identifier args)
+    :identifier (-quote-identifier (first args))
     :value (if (-valid-value args)
              (let [val (first args)]
                (-stringify-value val))
