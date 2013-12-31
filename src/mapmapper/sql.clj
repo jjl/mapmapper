@@ -2,7 +2,17 @@
   (:require [clojure.string :as string]
             [mapmapper.util :as u]))
 
-(declare -where-expr -where-op)
+(declare -where-expr -where-op -validate-where-expr)
+
+(def -default-forced-binops
+  ["in" "not in"])
+(def -default-forced-ternops
+  ["between" "not between"])
+
+(defn is-forced-ternop? [thing]
+  (not= (.indexOf -default-forced-ternops thing) -1))
+(defn is-forced-binop? [thing]
+  (not= (.indexOf -default-forced-binops thing) -1))
 
 (defn -alias-table [table aliases]
   (let [next (str "t" (-> aliases keys count))
@@ -40,13 +50,6 @@
 
 (def where-atom-types
   [:identifier :value :op])
-  
-(defn where [query w]
-  (assoc query :where w))
-
- ;; [:identifier ["name" "pieces"]]
- ;; [:value val]
- ;; [:op name [args] {meta data}]
 
 (defn -valid-where-atom [[head & tail]]
   (and (keyword? head)
@@ -67,6 +70,80 @@
        (not (map? item))
        (= (count item) 3)))
 
+(defn -validate-value-list [val-list]
+  (if (-valid-value val-list)
+    true
+    (throw (Exception. (str "invalid value: " val-list)))))
+
+(defn -validate-boolean-value [val-list]
+  (-validate-value-list val-list)
+  (if (u/is-boolean? (first val-list))
+    true
+    (throw (Exception. (str "Expected boolean value: " val-list)))))
+
+(defn -validate-where-op [[op args]]
+  (cond
+   (or (= op :apply)
+       (= op "apply"))
+   (do 
+     (when-not (vector? args)
+       (throw (Exception. "Function application requires a vector of arguments")))
+     (when-not (> (count args) 0)
+       (throw (Exception. (str "Expected function name " args))))
+     (when (> (count args) 0)
+            (map -validate-where-expr args))
+     (when (and (is-forced-binop? op)
+                (not= (count args) 2))
+       (throw (Exception. (str "Found binop " op " but found " (count args) " arguments"))))
+     (when (and (is-forced-ternop? op)
+                (not= (count args) 3))
+       (throw (Exception. (str "Found ternop " op " but found " (count args) " arguments")))))
+   (u/is-string? op)
+   (map -validate-where-expr args)))
+
+(defn -validate-identifier-list [l]
+  (when-not (vector? l)
+    (throw (Exception. "Expected vector for identifier list")))
+  (when-not (= (count l) 1)
+    (throw (Exception. "Expected single vector for identifier")))
+  (let [v (get l 0)]
+    (when-not (vector? v)
+      (throw (Exception. "Expected single vector for identifier")))
+    (when-not (seq v)
+      (throw (Exception. "Expected identifier")))
+    true))
+
+(defn -validate-where-expr [w]
+  (let [[type & args] w]
+    (condp = type
+      :identifier (-validate-identifier-list args)
+      :value (-validate-value-list args)
+      :op (-validate-where-op args)
+      (throw (Exception. (str "Invalid where atom: " w))))))
+  
+(defn -validate-where [w]
+  (let [[type & args] w]
+    (condp = type
+      :identifier (throw (Exception. "unexpected identifier at toplevel"))
+      :value (-validate-boolean-value args)
+      :op (-validate-where-op args)
+      (throw (Exception. (str "Invalid where atom: " w))))))
+
+(defn -validate-from [f]
+  true)
+  
+(defn where [query w]
+  (-validate-where w)
+  (assoc query :where w))
+
+(defn from [query f]
+  (-validate-from f)
+  (assoc query :from f))
+
+ ;; [:identifier ["name" "pieces"]]
+ ;; [:value val]
+ ;; [:op name [args] {meta data}]
+
 (defn -maybe-metadata [item]
   (when (and (seq item)
              (= (count item) 1))
@@ -85,10 +162,8 @@
 (defn -where-expr [[type & args]]
   (condp = type
     :identifier (-quote-identifier (first args))
-    :value (if (-valid-value args)
-             (let [val (first args)]
-               (-stringify-value val))
-             (throw (Exception. (str "expected value: " val))))
+    :value (let [val (first args)]
+             (-stringify-value val))
     :op (-where-op args)
     (throw (Exception. (str "-where-expr: " type)))))
 
@@ -103,7 +178,6 @@
           :default
           (let [joiner (str " " op " ")]
             (str "(" (string/join joiner mapped) ")")))))
-    
 
 (defn -where-op [[op args & maybe-metadata]]
   (let [[func fargs] args
@@ -122,15 +196,10 @@
 (defn -generate-where [query]
   (let [where (get query :where)]
     (when where
-       (if-not (-valid-where-atom where)
-         (throw (IllegalArgumentException. "Invalid where atom")))
        (let [[type & args] where]
           (condp = type
-            :identifier (throw (Exception. "Toplevel: unexpected identifier"))
             :value (let [val (first args)]
-                     (if (instance? java.lang.Boolean val)
-                       (str "WHERE " val)
-                       (throw (Exception. "Toplevel: unexpected non-boolean value"))))
+                     (str "WHERE " val))
             :op (str "WHERE " (-where-op args)))))))
 
 (defn -maybe-where [base query]
