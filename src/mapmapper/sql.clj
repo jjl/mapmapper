@@ -82,6 +82,17 @@
     :op (-where-op args)
     (throw (Exception. (str "-where-expr: " type)))))
 
+(defn -where-bin-or-multi-op [op args]
+  (if (or (= op "in") ;; REALLY refactor me
+          (= op "not in"))
+    (let [mapped (map -where-expr args)
+          [head & tail] mapped]
+      (str "(" head " IN (" (string/join ", " tail) "))"))
+    (let [mapped (map -where-expr args)
+                 joiner (str " " op " ")]
+             (str "(" (string/join joiner mapped) ")"))))
+    
+
 (defn -where-op [[op args & maybe-metadata]]
   (let [[func fargs] args
         metadata (-maybe-metadata maybe-metadata)]
@@ -90,13 +101,11 @@
          (= op "apply")) (let [mapped (map -where-expr fargs)]
                            (str func "(" (string/join ", " mapped) ")"))
          :else (condp = (count args)
-           1 (let [postfix (get metadata :postfix false)]
-               (if postfix
-                 (str "(" (-where-expr (first args)) ") " op)
-                 (str op " " (-where-expr args))))
-           (let [mapped (map -where-expr args)
-                 joiner (str " " op " ")]
-             (str "(" (string/join joiner mapped) ")"))))))
+                 1 (let [postfix (get metadata :postfix false)]
+                     (if postfix
+                       (str "(" (-where-expr (first args)) ") " op)
+                       (str op " " (-where-expr args))))
+                 (-where-bin-or-multi-op op args)))))
 
 (defn -generate-where [query]
   (let [where (get query :where)]
