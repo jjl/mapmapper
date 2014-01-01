@@ -69,12 +69,13 @@
   (-mandate-first input :alias)
   (-mandate-string alias)
   (condp = context
-    :from (let [[type & rest] item]
-            (condp = type
-              :table (-munge-table item)
-              :join (-munge-join item
-              (u/unexpected-err item)))
-    (throw (Exception. (str "Unknown alias context: " context))))))
+    :from (let [[type & rest] item
+                next (condp = type
+                       :table (-munge-table item)
+                       :join (-munge-join item)
+                       (u/unexpected-err item))]
+            [:alias next alias])
+    (throw (Exception. (str "Unknown alias context: " context)))))
 
 (defn munge-from [f]
   (-mandate-vector f)
