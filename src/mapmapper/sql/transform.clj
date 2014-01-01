@@ -3,10 +3,13 @@
 
 (declare -munge-set-atom)
 
+(defn veclike? [v]
+  (or (vector? v)
+      (list? v)
+      (seq? v)))
+
 (defn -mandate-vector [v]
-  (when-not (or (vector? v)
-                (list? v)
-                (seq? v))
+  (when-not (veclike? v)
     (throw (Exception. (str "Expected vector: " v)))))
 
 (defn -mandate-length [v c]
@@ -31,12 +34,12 @@
 (defn -munge-identifier [a]
   (cond
    (string? a) [:identifier [a]]
-   (vector? a) (let [[head & tail] a]
+   (veclike? a) (let [[head & tail] a]
                  (cond
                   (= head :identifier) (do
                                          (if (= (count tail) 1)
                                            (let [fst (first tail)]
-                                             (if (vector? fst)
+                                             (if (veclike? fst)
                                                (if (every? string? fst)
                                                  [:identifier fst]
                                                  (u/unexpected-err fst))
@@ -61,7 +64,7 @@
 (defn -munge-set-value [a]
   (cond
    (= a [:placeholder]) a
-   (vector? a) (let [[head & tail] a]
+   (veclike? a) (let [[head & tail] a]
                  (cond
                   (= head :value) (-munge-value a)
                   (= head :identifier) (-munge-identifier a)
@@ -71,11 +74,11 @@
 (defn -munge-set-atom [a]
   (cond
    (string? a) [(-munge-identifier a) [:placeholder]]
-   (vector? a) (let [[head & tail] a]
+   (veclike? a) (let [[head & tail] a]
                  (cond
                   (= head :identifier) (let [i (-munge-identifier a)]
                                          [i [:placeholder]])
-                  (vector? head) (do
+                  (veclike? head) (do
                                   (-mandate-length tail 1)
                                   (let [head2 (first tail)]
                                     [(-munge-identifier head)
