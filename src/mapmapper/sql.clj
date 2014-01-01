@@ -1,8 +1,9 @@
 (ns mapmapper.sql
   (:require [clojure.string :as string]
-            [mapmapper.util :as u]))
+            [mapmapper.util :as u])
+  (:refer-clojure :except [set]))
 
-(declare -where-expr -where-op -validate-where-expr)
+(declare -where-expr -where-op -validate-where-expr -validate-set -validate-identifier)
 
 (def -default-forced-binops
   ["in" "not in"])
@@ -48,8 +49,18 @@
   {:type :update
    :table table})
 
+(defn set [query fields]
+  (-validate-set fields)
+  (assoc query :set fields))
+
 (def where-atom-types
   [:identifier :value :op])
+
+(defn -validate-set [fields]
+  (when-not (and (seq fields)
+                 (not (map? fields)))
+    (throw (Exception. "Expected fields to set")))
+  (every? -validate-identifier fields))
 
 (defn -valid-where-atom [[head & tail]]
   (and (keyword? head)
@@ -101,17 +112,16 @@
    (u/is-string? op)
    (map -validate-where-expr args)))
 
+(defn -validate-identifier [i]
+  (when-not (u/is-string? i)
+    (throw (Exception. "Expected string for identifier"))))
+
 (defn -validate-identifier-list [l]
   (when-not (vector? l)
     (throw (Exception. "Expected vector for identifier list")))
   (when-not (= (count l) 1)
     (throw (Exception. "Expected single vector for identifier")))
-  (let [v (get l 0)]
-    (when-not (vector? v)
-      (throw (Exception. "Expected single vector for identifier")))
-    (when-not (seq v)
-      (throw (Exception. "Expected identifier")))
-    true))
+  (map (comp -validate-identifier first) l))
 
 (defn -validate-where-expr [w]
   (let [[type & args] w]
@@ -208,6 +218,16 @@
       (str base " " where)
       base)))
 
+(defn -generate-set [query]
+  (let [fields (get query :set [])
+        table (:table query)
+        qualified-fields (map #(-quote-identifier [table %]) fields)]
+    (-validate-set fields)
+    (when (seq fields)
+      (str "SET "
+           (string/join ", "
+                        (map #(str % " = ?") qualified-fields))))))
+
 (defn -generate-insert [query]
   (let [cols (:cols query)
         table (:table query)
@@ -219,8 +239,15 @@
 
 (defn -generate-select [query]
   "not implemented")
+
 (defn -generate-update [query]
-  "not implemented")
+  (let [where (get query :where {})
+        table (:table query)
+        base-query (string/join " " ["UPDATE" table])
+        set-part (-generate-set query)
+        base-set (string/join " " [base-query set-part])]
+    (-maybe-where base-set query)))
+
 (defn -generate-delete [query]
   (let [where (get query :where {})
         table (:table query)

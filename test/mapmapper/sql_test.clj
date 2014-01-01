@@ -36,14 +36,33 @@
         (is (= s1 e1))))))
 
 (deftest update
-  (let [t1 (s/update "foo")]
+  (let [wrong-fields #"^Expected fields to set$"
+        gen-err (fn [x] (s/set (s/update "foo") x))
+        basic (s/update "foo")
+        t1 (s/set basic ["bar" "baz"])
+        t2 (s/where t1 [:op "and" [[:value true]
+                                   [:op "=" [[:identifier ["foo" "bar"]]
+                                             [:value false]]]]])]
     (testing "map generation"
-      (let [e1 {:type :update :table "foo"}]
-        (is (= t1 e1))))
-    (testing "sql generation"
-      (let [s1 (s/generate t1)
-            e1 "not implemented"]
-        (is (= s1 e1))))))
+      (is (thrown-with-msg? Exception wrong-fields (gen-err [])))
+      (is (thrown-with-msg? Exception wrong-fields (gen-err {})))
+      (is (thrown-with-msg? Exception wrong-fields (gen-err {:foo :bar})))
+      (let [e1 {:type :update :table "foo" :set ["bar" "baz"]}
+            e2 {:type :update :table "foo" :set ["bar" "baz"]
+                :where [:op "and" [[:value true]
+                                   [:op "=" [[:identifier ["foo" "bar"]]
+                                  [:value false]]]]]}]
+        (is (= t1 e1))
+        (is (= t2 e2))))
+  (testing "sql generation"
+    (is (thrown-with-msg? Exception wrong-fields (s/generate (s/update "foo"))))
+    (let [s1 (s/generate t1)
+          e1 "UPDATE foo SET \"foo\".\"bar\" = ?, \"foo\".\"baz\" = ?"
+          s2 (s/generate t2)
+          e2 "UPDATE foo SET \"foo\".\"bar\" = ?, \"foo\".\"baz\" = ? WHERE (true and (\"foo\".\"bar\" = false))"]
+      (is (= s1 e1))
+      (is (= s2 e2))))))
+
 
 (deftest delete
   (let [t1 (s/delete "foo")
