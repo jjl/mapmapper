@@ -1,9 +1,10 @@
 (ns mapmapper.sql
   (:require [clojure.string :as string]
-            [mapmapper.util :as u])
+            [mapmapper.util :as u]
+            [mapmapper.sql.transform :as t])
   (:refer-clojure :except [set]))
 
-(declare -where-expr -where-op -validate-where-expr -validate-set -validate-identifier)
+(declare -render-expr)
 
 (def -default-forced-binops
   ["in" "not in"])
@@ -20,8 +21,11 @@
         new-aliases (assoc aliases next table)]
     [next new-aliases]))
 
-(defn -quote-identifier [pieces]
-  (str \" (string/join "\".\"" pieces) \"))
+(defn -render-identifier [i]
+  (str \" (string/join "\".\"" (get i 1)) \"))
+
+(defn -render-placeholder [& ignored]
+  "?")
 
 (defn -generate-placeholders [count]
   (let [prefix (repeat (dec count) "?,")
@@ -29,13 +33,10 @@
         combined (concat prefix suffix)]
     (string/join " " combined)))
 
-(defn -qualified-names [table cols]
-  (string/join ", " (map #(-quote-identifier [table %]) cols)))
-
 (defn insert [table cols]
   {:type :insert
    :table table
-   :cols cols})
+   :cols (t/munge-insert cols)})
 
 (defn delete [table]
   {:type :delete
@@ -50,106 +51,20 @@
    :table table})
 
 (defn set [query fields]
-  (-validate-set fields)
-  (assoc query :set fields))
+  (assoc query :set (t/munge-set fields)))
 
 (def where-atom-types
   [:identifier :value :op])
-
-(defn -validate-set [fields]
-  (when-not (and (seq fields)
-                 (not (map? fields)))
-    (throw (Exception. "Expected fields to set")))
-  (every? -validate-identifier fields))
 
 (defn -valid-where-atom [[head & tail]]
   (and (keyword? head)
        (not= -1 (.indexOf where-atom-types head))))
 
-(defn -valid-value [item]
-  (and (seq item)
-       (not (map? item))
-       (= (count item) 1)))
-
-(defn -valid-binop-data [item]
-  (and (seq item)
-       (not (map? item))
-       (= (count item) 2)))
-  
-(defn -valid-ternop-data [item]
-  (and (seq item)
-       (not (map? item))
-       (= (count item) 3)))
-
-(defn -validate-value-list [val-list]
-  (if (-valid-value val-list)
-    true
-    (throw (Exception. (str "invalid value: " val-list)))))
-
-(defn -validate-boolean-value [val-list]
-  (-validate-value-list val-list)
-  (if (u/is-boolean? (first val-list))
-    true
-    (throw (Exception. (str "Expected boolean value: " val-list)))))
-
-(defn -validate-where-op [[op args]]
-  (cond
-   (or (= op :apply)
-       (= op "apply"))
-   (do 
-     (when-not (vector? args)
-       (throw (Exception. "Function application requires a vector of arguments")))
-     (when-not (> (count args) 0)
-       (throw (Exception. (str "Expected function name " args))))
-     (when (> (count args) 0)
-            (map -validate-where-expr args))
-     (when (and (is-forced-binop? op)
-                (not= (count args) 2))
-       (throw (Exception. (str "Found binop " op " but found " (count args) " arguments"))))
-     (when (and (is-forced-ternop? op)
-                (not= (count args) 3))
-       (throw (Exception. (str "Found ternop " op " but found " (count args) " arguments")))))
-   (u/is-string? op)
-   (map -validate-where-expr args)
-   :default (throw (Exception. (str "Don't know what to do with " op args)))))
-
-(defn -validate-identifier [i]
-  (when-not (u/is-string? i)
-    (throw (Exception. "Expected string for identifier"))))
-
-(defn -validate-identifier-list [l]
-  (when-not (vector? l)
-    (throw (Exception. "Expected vector for identifier list")))
-  (when-not (= (count l) 1)
-    (throw (Exception. "Expected single vector for identifier")))
-  (map (comp -validate-identifier first) l))
-
-(defn -validate-where-expr [w]
-  (let [[type & args] w]
-    (condp = type
-      :identifier (-validate-identifier-list args)
-      :value (-validate-value-list args)
-      :op (-validate-where-op args)
-      (throw (Exception. (str "Invalid where atom: " w))))))
-  
-(defn -validate-where [w]
-  (let [[type & args] w]
-    (condp = type
-      :identifier (throw (Exception. "unexpected identifier at toplevel"))
-      :value (-validate-boolean-value args)
-      :op (-validate-where-op args)
-      (throw (Exception. (str "Invalid where atom: " w))))))
-
-(defn -validate-from [f]
-  true)
-  
 (defn where [query w]
-  (-validate-where w)
-  (assoc query :where w))
+  (assoc query :where (t/munge-where w)))
 
 (defn from [query f]
-  (-validate-from f)
-  (assoc query :from f))
+  (assoc query :from (t/munge-from f)))
 
  ;; [:identifier ["name" "pieces"]]
  ;; [:value val]
@@ -163,23 +78,15 @@
         metadata
         {}))))
 
-(defn -stringify-value [value]
+(defn -render-value [[kw value]]
   (cond
    (u/is-numeric? value) (str value)
    (u/is-boolean? value) (str value)
    (u/is-string? value) (str \' value \')
    :default (throw (Exception. (str "don't know how to handle a " (class value))))))
 
-(defn -where-expr [[type & args]]
-  (condp = type
-    :identifier (-quote-identifier (first args))
-    :value (let [val (first args)]
-             (-stringify-value val))
-    :op (-where-op args)
-    (throw (Exception. (str "-where-expr: " type)))))
-
-(defn -where-bin-or-multi-op [op args]
-  (let [mapped (map -where-expr args)]
+(defn -render-nonunary-op [[kw op args]]
+  (let [mapped (map -render-expr args)]
     (cond (is-forced-binop? op)
           (let [[head & tail] mapped]
             (str "(" head " " op " (" (string/join ", " tail) "))"))
@@ -190,66 +97,85 @@
           (let [joiner (str " " op " ")]
             (str "(" (string/join joiner mapped) ")")))))
 
-(defn -where-op [[op args & maybe-metadata]]
-  (let [[func fargs] args
-        metadata (-maybe-metadata maybe-metadata)]
-    (cond
-     (or (= op :apply)
-         (= op "apply")) (let [mapped (map -where-expr fargs)]
-                           (str func "(" (string/join ", " mapped) ")"))
-         :else (condp = (count args)
-                 1 (let [postfix (get metadata :postfix false)]
-                     (if postfix
-                       (str "(" (-where-expr (first args)) ") " op)
-                       (str op " " (-where-expr args))))
-                 (-where-bin-or-multi-op op args)))))
+(defn -render-function-application [[kw1 kw2 [func args]]]
+  (let [rendered (map -render-expr args)]
+    (str func "(" (string/join ", " rendered) ")")))
 
-(defn -generate-where [query]
+(defn -render-unary-op [[kw op args & maybe-metadata :as input]]
+  (let [metadata (-maybe-metadata maybe-metadata)
+        postfix (:postfix metadata)]
+    (if postfix
+      (str "(" (-render-expr (first args)) ")" op)
+      (str op " " (-render-expr args)))))
+
+(defn -render-unknown-op [[kw op args & maybe-metadata :as input]]
+  ((if (= (count args) 1)
+    -render-unary-op
+    -render-nonunary-op) input))
+  
+(defn -render-op [[kw op args & maybe-metadata :as input]]
+  ((if (or (= op :apply) (= op "apply"))
+     -render-function-application
+     -render-unknown-op) input))
+
+(defn -render-where [query]
   (let [where (get query :where)]
     (when where
-       (let [[type & args] where]
-          (condp = type
-            :value (let [val (first args)]
-                     (str "WHERE " val))
-            :op (str "WHERE " (-where-op args)))))))
+      (str "WHERE " (-render-expr where)))))
 
 (defn -maybe-where [base query]
-  (let [where (-generate-where query)]
+  (let [where (-render-where query)]
     (if where
       (str base " " where)
       base)))
 
-(defn -generate-set [query]
-  (let [fields (get query :set [])
-        table (:table query)
-        qualified-fields (map #(-quote-identifier [table %]) fields)]
-    (-validate-set fields)
-    (when (seq fields)
-      (str "SET "
-           (string/join ", "
-                        (map #(str % " = ?") qualified-fields))))))
+(defn -render-raw [[kw arg]]
+  (str arg))
 
-(defn -generate-insert [query]
+(defn -render-expr [[head & tail :as expr]]
+  (cond
+   (= head :raw) (-render-raw expr)
+   (= head :identifier) (-render-identifier expr)
+   (= head :value) (-render-value expr)
+   (= head :op) (-render-op expr)
+   (= head :placeholder) (-render-placeholder)
+   :default (u/unexpected-err expr)))
+
+(defn -render-set-expr [[l r]]
+  (let [left (-render-identifier l)
+        right (-render-expr r)]
+    (str left " = " right)))
+        
+(defn -render-set [query]
+  (let [fields (get query :set [])
+        pieces (map -render-set-expr fields)]
+    (str "SET " (string/join ", " pieces))))
+
+(defn -render-insert [query]
   (let [cols (:cols query)
         table (:table query)
-        q-cols (-qualified-names table cols)
+        q-cols (string/join ", "
+                            (map (comp -render-identifier
+                                       first) cols))
+;; TODO: we should check what to render here, not assume placeholders
         placeholders (-generate-placeholders (count cols))]
     (string/join " " ["INSERT INTO"
                       table "(" q-cols ")"
                       "VALUES" "(" placeholders ")"])))
 
-(defn -generate-select [query]
+(defn -render-select [query]
   "not implemented")
 
-(defn -generate-update [query]
+(defn -render-update [query]
   (let [where (get query :where {})
         table (:table query)
         base-query (string/join " " ["UPDATE" table])
-        set-part (-generate-set query)
+        set (t/munge-set (:set query))
+        set-part (-render-set (assoc query :set set))
         base-set (string/join " " [base-query set-part])]
     (-maybe-where base-set query)))
 
-(defn -generate-delete [query]
+(defn -render-delete [query]
   (let [where (get query :where {})
         table (:table query)
         base-query (string/join " " ["DELETE FROM" table])]
@@ -257,8 +183,8 @@
 
 (defn generate [query]
   (let [type (:type query)]
-    (cond (= type :insert) (-generate-insert query)
-          (= type :select) (-generate-select query)
-          (= type :update) (-generate-update query)
-          (= type :delete) (-generate-delete query))))
+    (cond (= type :insert) (-render-insert query)
+          (= type :select) (-render-select query)
+          (= type :update) (-render-update query)
+          (= type :delete) (-render-delete query))))
 

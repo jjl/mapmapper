@@ -17,3 +17,7 @@
 
 (defn is-string? [item]
   (instance? java.lang.String item))
+
+(defn unexpected-err [v]
+  (throw (Exception. (str "Unexpected data: " v))))
+

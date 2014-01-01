@@ -18,11 +18,14 @@
 (deftest insert
   (let [t1 (s/insert "foo" ["bar" "baz" "quux"])]
     (testing "map generation"
-      (let [e1 {:type :insert :table "foo" :cols ["bar" "baz" "quux"]}]
+      (let [e1 {:type :insert :table "foo"
+                :cols [[[:identifier ["bar"]] [:placeholder]]
+                       [[:identifier ["baz"]] [:placeholder]]
+                       [[:identifier ["quux"]] [:placeholder]]]}]
         (is (= t1 e1))))
     (testing "sql generation"
       (let [s1 (s/generate t1)
-            e1 "INSERT INTO foo ( \"foo\".\"bar\", \"foo\".\"baz\", \"foo\".\"quux\" ) VALUES ( ?, ?, ? )"]
+            e1 "INSERT INTO foo ( \"bar\", \"baz\", \"quux\" ) VALUES ( ?, ?, ? )"]
         (is (= s1 e1))))))
 
 (deftest select
@@ -36,7 +39,8 @@
         (is (= s1 e1))))))
 
 (deftest update
-  (let [wrong-fields #"^Expected fields to set$"
+  (let [insufficient-data #"^Expected collection of minimum length:"
+        expected-vector #"^Expected vector:"
         gen-err (fn [x] (s/set (s/update "foo") x))
         basic (s/update "foo")
         t1 (s/set basic ["bar" "baz"])
@@ -44,22 +48,26 @@
                                    [:op "=" [[:identifier ["foo" "bar"]]
                                              [:value false]]]]])]
     (testing "map generation"
-      (is (thrown-with-msg? Exception wrong-fields (gen-err [])))
-      (is (thrown-with-msg? Exception wrong-fields (gen-err {})))
-      (is (thrown-with-msg? Exception wrong-fields (gen-err {:foo :bar})))
-      (let [e1 {:type :update :table "foo" :set ["bar" "baz"]}
-            e2 {:type :update :table "foo" :set ["bar" "baz"]
+      (is (thrown-with-msg? Exception insufficient-data (gen-err [])))
+      (is (thrown-with-msg? Exception expected-vector (gen-err {})))
+      (is (thrown-with-msg? Exception expected-vector (gen-err {:foo :bar})))
+      (let [e1 {:type :update :table "foo"
+                :set [[[:identifier ["bar"]] [:placeholder]]
+                      [[:identifier ["baz"]] [:placeholder]]]}
+            e2 {:type :update :table "foo"
+                :set [[[:identifier ["bar"]] [:placeholder]]
+                      [[:identifier ["baz"]] [:placeholder]]]
                 :where [:op "and" [[:value true]
                                    [:op "=" [[:identifier ["foo" "bar"]]
                                   [:value false]]]]]}]
         (is (= t1 e1))
         (is (= t2 e2))))
   (testing "sql generation"
-    (is (thrown-with-msg? Exception wrong-fields (s/generate (s/update "foo"))))
+    (is (thrown-with-msg? Exception expected-vector (s/generate (s/update "foo"))))
     (let [s1 (s/generate t1)
-          e1 "UPDATE foo SET \"foo\".\"bar\" = ?, \"foo\".\"baz\" = ?"
+          e1 "UPDATE foo SET \"bar\" = ?, \"baz\" = ?"
           s2 (s/generate t2)
-          e2 "UPDATE foo SET \"foo\".\"bar\" = ?, \"foo\".\"baz\" = ? WHERE (true and (\"foo\".\"bar\" = false))"]
+          e2 "UPDATE foo SET \"bar\" = ?, \"baz\" = ? WHERE (true and (\"foo\".\"bar\" = false))"]
       (is (= s1 e1))
       (is (= s2 e2))))))
 
@@ -122,7 +130,7 @@
             e2 "DELETE FROM foo WHERE true"
             e3 "DELETE FROM foo WHERE (true and false)"
             e4 "DELETE FROM foo WHERE (1 = \"table\".\"column\")"
-            e5 "DELETE FROM foo WHERE (true) ::bool"
+            e5 "DELETE FROM foo WHERE (true)::bool"
             e6 "DELETE FROM foo WHERE bool(true)"
             e7 "DELETE FROM foo WHERE (\"table\".\"column\" in (1, 2))"
             e8 "DELETE FROM foo WHERE (\"table\".\"column\" not in (1, 2))"
