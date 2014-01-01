@@ -27,12 +27,6 @@
 (defn -render-placeholder [& ignored]
   "?")
 
-(defn -generate-placeholders [count]
-  (let [prefix (repeat (dec count) "?,")
-        suffix (when (> count 0) ["?"])
-        combined (concat prefix suffix)]
-    (string/join " " combined)))
-
 (defn insert [table cols]
   {:type :insert
    :table table
@@ -158,10 +152,12 @@
                             (map (comp -render-identifier
                                        first) cols))
 ;; TODO: we should check what to render here, not assume placeholders
-        placeholders (-generate-placeholders (count cols))]
+        q-vals (string/join ", "
+                            (map (comp -render-expr
+                                       second) cols))]
     (string/join " " ["INSERT INTO"
                       table "(" q-cols ")"
-                      "VALUES" "(" placeholders ")"])))
+                      "VALUES" "(" q-vals ")"])))
 
 (defn -render-select [query]
   "not implemented")

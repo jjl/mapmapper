@@ -2,19 +2,6 @@
   (:require [clojure.test :refer :all]
             [mapmapper.sql :as s]))
 
-(deftest utilities
-  (testing "-generate-placeholders"
-    (let [g s/-generate-placeholders
-          t0 (g 0)
-          t1 (g 1)
-          t2 (g 4)
-          e0 ""
-          e1 "?"
-          e2 "?, ?, ?, ?"]
-      (is (= t0 e0))
-      (is (= t1 e1))
-      (is (= t2 e2)))))
-
 (deftest insert
   (let [t1 (s/insert "foo" ["bar" "baz" "quux"])]
     (testing "map generation"
