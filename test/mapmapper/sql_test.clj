@@ -84,7 +84,7 @@
                                         [:value 1]
                                         [:value 2]]]))
         t10 (-> (s/delete "foo")
-                (s/where [:op "between" [[:identifier ["table" "column"]]
+                (s/where [:op "not between" [[:identifier ["table" "column"]]
                                          [:value 1]
                                          [:value 2]]]))]
 
@@ -130,4 +130,7 @@
         (is (= s4 e4))
         (is (= s5 e5))
         (is (= s6 e6))
-        (is (= s7 e7))))))
+        (is (= s7 e7))
+        (is (= s8 e8))
+        (is (= s9 e9))
+        (is (= s10 e10))))))
