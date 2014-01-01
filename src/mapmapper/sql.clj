@@ -110,7 +110,8 @@
                 (not= (count args) 3))
        (throw (Exception. (str "Found ternop " op " but found " (count args) " arguments")))))
    (u/is-string? op)
-   (map -validate-where-expr args)))
+   (map -validate-where-expr args)
+   :default (throw (Exception. (str "Don't know what to do with " op args)))))
 
 (defn -validate-identifier [i]
   (when-not (u/is-string? i)
