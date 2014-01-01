@@ -1,7 +1,7 @@
 (ns mapmapper.sql.transform
   (require [mapmapper.util :as u]))
 
-(declare -munge-set-atom)
+(declare -munge-set-atom munge-from -munge-expr)
 
 (defn veclike? [v]
   (or (vector? v)
@@ -32,12 +32,62 @@
 
 (defn -munge-op [o] o)
 
-(defn munge-from [f] f)
+;; [:table name]
+(defn -munge-table [[kw name :as input]]
+  (-mandate-first input :table)
+  (-mandate-string name)
+  [:table name])
+
+(defn -munge-join-meta [m]
+  ;; Can't say I'm happy about defaulting to a cross join, but it's the only
+  ;; sane option with conditionals etc.
+  (let [type (get m :type :cross)
+        on (:on m)]
+    (cond
+     (= type :cross) (do
+                       (when (seq on)
+                         (throw (Exception. "Cross joins cannot have conditions")))
+                       {:type :cross})
+     (not= -1 (.indexOf
+               [:left :right :inner]
+               type)) (do
+                        (when-not (seq on)
+                          (throw (Exception. (str (name type) " joins require a condition"))))
+                        {:type type
+                         :on (-munge-expr on)})
+     :default (u/unexpected-err m))))
+
+;; [:join t1 t2 {:type :left :on expr}]
+(defn -munge-join [[kw t1 t2 & maybe-meta :as input]]
+  (-mandate-first input :join)
+  (let [meta (if (seq maybe-meta)
+               (-munge-join-meta (first maybe-meta))
+               {})]
+    [:join (munge-from t1) (munge-from t2) meta]))
+
+(defn -munge-alias [[kw item alias :as input] context]
+  (-mandate-first input :alias)
+  (-mandate-string alias)
+  (condp = context
+    :from (let [[type & rest] item]
+            (condp = type
+              :table (-munge-table item)
+              :join (-munge-join item
+              (u/unexpected-err item)))
+    (throw (Exception. (str "Unknown alias context: " context))))))
+
+(defn munge-from [f]
+  (-mandate-vector f)
+  (map (fn [[type & attrs :as head]]
+         (condp = type
+          :table (-munge-table head)
+          :join (-munge-join head)
+          :alias (-munge-alias head :from)
+          (u/unexpected-err head))) f))
 
 (defn munge-insert [i]
   (-mandate-vector i)
   (map -munge-set-atom i))
-                  
 
 (defn -munge-identifier [a]
   (cond

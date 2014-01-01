@@ -82,6 +82,7 @@
           len #"^Expected collection of minimum length:"
           ms t/munge-set]
       (is (thrown-with-msg? Exception vec (ms {})))
-      (is (thrown-with-msg? Exception len (ms []))))))
+      (is (thrown-with-msg? Exception len (ms [])))))
                        
-              
+  (testing "munge-from"))
+    
