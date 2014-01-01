@@ -50,10 +50,6 @@
 (def where-atom-types
   [:identifier :value :op])
 
-(defn -valid-where-atom [[head & tail]]
-  (and (keyword? head)
-       (not= -1 (.indexOf where-atom-types head))))
-
 (defn where [query w]
   (assoc query :where (t/munge-where w)))
 
