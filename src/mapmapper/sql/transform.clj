@@ -61,10 +61,9 @@
 ;; LATERAL [:alias [:query {}] alias]
 (defn -munge-lateral [[kw [head & tail :as thing] :as input]]
   (-mandate-first input :lateral)
-  (let [next (condp = head
-               :alias (-munge-alias thing :query)
-               :query (-munge-query thing))]
-    [:lateral next]))
+  (if (= head :alias)
+    [:lateral (-munge-alias thing :query)]
+    (throw (Exception. "LATERAL subqueries MUST be aliased"))))
 
 ;; [:join t1 t2 {:type :left :on expr}]
 ;; TODO:
@@ -98,6 +97,7 @@
           :table (-munge-table head)
           :join (-munge-join head)
           :alias (-munge-alias head :from)
+          :lateral (-munge-lateral head)
           (u/unexpected-err head))) f))
 
 ;; [:query {}] --- FIXME
