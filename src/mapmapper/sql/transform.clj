@@ -84,6 +84,8 @@
                        :table (-munge-table item)
                        :join (-munge-join item)
                        :query (-munge-query item)
+;; http://www.postgresql.org/docs/9.3/static/queries-table-expressions.html#QUERIES-FROM
+                       :tablefunc (throw (Exception. "Don't support table function FROM sources yet"))
                        (u/unexpected-err item))
                :query (if (= type :query)
                         (-munge-query item)
@@ -91,6 +93,9 @@
                (throw (Exception. (str "Unknown alias context: " context))))]           
     [:alias next alias]))
 
+;; This may have to be modified to support contexts since
+;; Not everything should be permissible in e.g. an UPDATE
+;; At least I think so, need to play around.
 (defn munge-from [f]
   (-mandate-vector f)
   (map (fn [[type & attrs :as head]]
@@ -99,6 +104,8 @@
           :join (-munge-join head)
           :alias (-munge-alias head :from)
           :lateral (-munge-lateral head)
+;; http://www.postgresql.org/docs/9.3/static/queries-table-expressions.html#QUERIES-FROM
+          :tablefunc (throw (Exception. "Don't support table function FROM sources yet"))
           (u/unexpected-err head))) f))
 
 ;; [:query {}] --- FIXME
