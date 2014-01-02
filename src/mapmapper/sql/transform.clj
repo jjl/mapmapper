@@ -1,7 +1,7 @@
 (ns mapmapper.sql.transform
   (require [mapmapper.util :as u]))
 
-(declare -munge-set-atom munge-from -munge-expr)
+(declare -munge-set-atom munge-from -munge-expr -munge-alias -munge-join -munge-query)
 
 (defn veclike? [v]
   (or (vector? v)
@@ -57,7 +57,19 @@
                          :on (-munge-expr on)})
      :default (u/unexpected-err m))))
 
+;; LATERAL [:query {}]
+;; LATERAL [:alias [:query {}] alias]
+(defn -munge-lateral [[kw [head & tail :as thing] :as input]]
+  (-mandate-first input :lateral)
+  (let [next (condp = head
+               :alias (-munge-alias thing :query)
+               :query (-munge-query thing))]
+    [:lateral next]))
+
 ;; [:join t1 t2 {:type :left :on expr}]
+;; TODO:
+;; - NATURAL JOIN
+;; - USING (a,b,c)
 (defn -munge-join [[kw t1 t2 & maybe-meta :as input]]
   (-mandate-first input :join)
   (let [meta (if (seq maybe-meta)
@@ -65,17 +77,19 @@
                {})]
     [:join (munge-from t1) (munge-from t2) meta]))
 
-(defn -munge-alias [[kw item alias :as input] context]
+(defn -munge-alias [[kw [type & rest :as item] alias :as input] context]
   (-mandate-first input :alias)
   (-mandate-string alias)
-  (condp = context
-    :from (let [[type & rest] item
-                next (condp = type
+  (let [next (condp = context
+               :from (condp = type
                        :table (-munge-table item)
                        :join (-munge-join item)
-                       (u/unexpected-err item))]
-            [:alias next alias])
-    (throw (Exception. (str "Unknown alias context: " context)))))
+                       (u/unexpected-err item))
+               :query (if (= type :query)
+                        (-munge-query item)
+                        (u/unexpected-err item))
+               (throw (Exception. (str "Unknown alias context: " context))))]           
+    [:alias next alias]))
 
 (defn munge-from [f]
   (-mandate-vector f)
@@ -85,6 +99,9 @@
           :join (-munge-join head)
           :alias (-munge-alias head :from)
           (u/unexpected-err head))) f))
+
+;; [:query {}] --- FIXME
+(defn -munge-query [q] q)
 
 (defn munge-insert [i]
   (-mandate-vector i)
