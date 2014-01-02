@@ -83,6 +83,7 @@
                :from (condp = type
                        :table (-munge-table item)
                        :join (-munge-join item)
+                       :query (-munge-query item)
                        (u/unexpected-err item))
                :query (if (= type :query)
                         (-munge-query item)
