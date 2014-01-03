@@ -8,6 +8,12 @@
           falses [{} 1 "foo"]]
       (is (every? true? (map t/veclike? trues)))
       (is (every? (comp not true?) (map t/veclike? falses)))))
+  (testing "-mandate-vector")
+  (testing "-mandate-length")
+  (testing "-mandate-min-length")
+  (testing "-mandate-string")
+  (testing "-mandate-first"))
+(deftest munging
   (testing "-munge-identifier"
     (let [mapping [["foo" [:identifier ["foo"]]]
                    [["foo" "bar"] [:identifier ["foo" "bar"]]]
@@ -83,6 +89,21 @@
           ms t/munge-set]
       (is (thrown-with-msg? Exception vec (ms {})))
       (is (thrown-with-msg? Exception len (ms [])))))
-                       
-  (testing "munge-from"))
-    
+  (testing "munge-from")
+  (testing "-munge-query")
+  (testing "-munge-alias")
+  (testing "-munge-join-meta")
+  (testing "-munge-join")
+  (testing "-munge-lateral")
+  (testing "-munge-table")
+  (testing "-munge-op")
+  (testing "munge-where")
+  (testing "munge-insert")
+  (testing "-munge-group-by")
+  (testing "-munge-having")
+  (testing "-munge-window")
+  (testing "-munge-limit")
+  (testing "-munge-offset")
+  (testing "-munge-fetch")
+  (testing "-munge-for")
+  (testing "-munge-with"))

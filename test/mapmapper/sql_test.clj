@@ -18,7 +18,7 @@
 (deftest select
   (let [t1 (s/select "foo")]
     (testing "map generation"
-      (let [e1 {:type :select :table "foo"}]
+      (let [e1 {:type :select :table "foo" :meta {}}]
         (is (= t1 e1))))
     (testing "sql generation"
       (let [s1 (s/generate t1)
@@ -45,8 +45,11 @@
                 :set [[[:identifier ["bar"]] [:placeholder]]
                       [[:identifier ["baz"]] [:placeholder]]]
                 :where [:op "and" [[:value true]
-                                   [:op "=" [[:identifier ["foo" "bar"]]
-                                  [:value false]]]]]}]
+                                   [:op "="
+                                    [[:identifier ["foo" "bar"]]
+                                     [:value false]]
+                                    {}]]
+                                  {}]}]
         (is (= t1 e1))
         (is (= t2 e2))))
   (testing "sql generation"
@@ -94,10 +97,12 @@
             e2 {:type :delete :table "foo" :where [:value true]}
             e3 {:type :delete :table "foo" :where [:op "and"
                                                    [[:value true]
-                                                    [:value false]]]}
+                                                    [:value false]]
+                                                   {}]}
             e4 {:type :delete :table "foo" :where [:op "="
                                                    [[:value 1]
-                                                    [:identifier ["table" "column"]]]]}]
+                                                    [:identifier ["table" "column"]]]
+                                                   {}]}]
         (is (= t1 e1))
         (is (= t2 e2))
         (is (= t3 e3))

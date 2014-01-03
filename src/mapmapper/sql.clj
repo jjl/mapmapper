@@ -36,9 +36,10 @@
   {:type :delete
    :table table})
 
-(defn select [table]
+(defn select [table & maybe-meta]
   {:type :select
-   :table table})
+   :table table
+   :meta (t/munge-select-meta maybe-meta)})
 
 (defn update [table]
   {:type :update
@@ -87,7 +88,7 @@
           (let [joiner (str " " op " ")]
             (str "(" (string/join joiner mapped) ")")))))
 
-(defn -render-function-application [[kw1 kw2 [func args]]]
+(defn -render-function-application [[kw1 kw2 [func args] :as input]]
   (let [rendered (map -render-expr args)]
     (str func "(" (string/join ", " rendered) ")")))
 
@@ -104,9 +105,9 @@
     -render-nonunary-op) input))
   
 (defn -render-op [[kw op args & maybe-metadata :as input]]
-  ((if (or (= op :apply) (= op "apply"))
-     -render-function-application
-     -render-unknown-op) input))
+  (if (or (= op :apply) (= op "apply"))
+    (-render-function-application input)
+    (-render-unknown-op input)))
 
 (defn -render-where [query]
   (let [where (get query :where)]

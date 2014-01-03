@@ -8,9 +8,14 @@
       (list? v)
       (seq? v)))
 
-(defn -mandate-vector [v]
-  (when-not (veclike? v)
-    (throw (Exception. (str "Expected vector: " v)))))
+(defn -make-upred-mandater [pred name]
+  #(when-not (pred %)
+     (throw (Exception. (str "Expected " name ": " %)))))
+
+(def -mandate-vector (-make-upred-mandater veclike?      "vector"))
+(def -mandate-map    (-make-upred-mandater map?          "map"))
+(def -mandate-string (-make-upred-mandater u/is-string?  "string"))
+(def -mandate-bool   (-make-upred-mandater u/is-boolean? "boolean"))
 
 (defn -mandate-length [v c]
   (when-not (= (count v) c)
@@ -20,17 +25,27 @@
   (when-not (>= (count v) c)
     (throw (Exception. (str "Expected collection of minimum length: " c)))))
 
-(defn -mandate-string [i]
-  (when-not (string? i)
-    (throw (Exception. (str "Expected string: " i)))))
-
 (defn -mandate-first [a b]
   (when-not (= (first a) b)
     (throw (Exception. (str "Expected: " b ", got: " (first a))))))
 
-(defn munge-where [w] w)
+(defn munge-where [w]
+  (-munge-expr w))
 
-(defn -munge-op [o] o)
+(defn -munge-op [[kw op args & maybe-metadata :as input]]
+  (-mandate-first input :op)
+  (when-not (or (= :apply op)
+                (string? op))
+    (throw (Exception. "Your operator must be either a string or :apply")))
+  (-mandate-vector args)
+  (let [meta (if (seq maybe-metadata)
+               (first maybe-metadata)
+               {})]
+    (if (or (= :apply op)
+            (= "apply" op))
+      (let [[func fargs] args]
+        [:op :apply [func (map -munge-expr fargs)] meta])
+      [:op op (map -munge-expr args) meta])))
 
 ;; [:table name]
 (defn -munge-table [[kw name :as input]]
@@ -39,9 +54,7 @@
   [:table name])
 
 (defn -munge-join-meta [m]
-  ;; Can't say I'm happy about defaulting to a cross join, but it's the only
-  ;; sane option with conditionals etc.
-  (let [type (get m :type :cross)
+  (let [type (:type m)
         on (:on m)]
     (cond
      (= type :cross) (do
@@ -55,6 +68,11 @@
                           (throw (Exception. (str (name type) " joins require a condition"))))
                         {:type type
                          :on (-munge-expr on)})
+     (nil? type) (do
+                   (when-not on
+                     (throw (Exception. (str "Presumed you wanted an inner join since you didn't specify, but that requires a condition"))))
+                   {:type :inner
+                    :on (-munge-expr on)})
      :default (u/unexpected-err m))))
 
 ;; LATERAL [:query {}]
@@ -69,11 +87,13 @@
 ;; TODO:
 ;; - NATURAL JOIN
 ;; - USING (a,b,c)
-(defn -munge-join [[kw t1 t2 & maybe-meta :as input]]
+(defn -munge-join [[kw t1 [t2type & t2args :as t2] & maybe-meta :as input]]
   (-mandate-first input :join)
   (let [meta (if (seq maybe-meta)
                (-munge-join-meta (first maybe-meta))
                {})]
+    (when (and (= t2type :lateral) (= (:type meta) :right))
+      (throw (Exception. "Laterals cannot be joined to by a right join. Syntactically it would be valid, but either it would break you query or you should use an ordinary subquery")))
     [:join (munge-from t1) (munge-from t2) meta]))
 
 (defn -munge-alias [[kw [type & rest :as item] alias :as input] context]
@@ -108,8 +128,76 @@
           :tablefunc (throw (Exception. "Don't support table function FROM sources yet"))
           (u/unexpected-err head))) f))
 
-;; [:query {}] --- FIXME
-(defn -munge-query [q] q)
+;; FIXME. One of the things we can do here is check that 
+;; the user hasn't added types of clause that are unfit for the
+;; desired query type
+(defn -munge-select-query [q] q)
+(defn -munge-update-query [q] q)
+(defn -munge-delete-query [q] q)
+(defn -munge-insert-query [q] q)
+
+;; [:query {}]
+;; Realistically this is more verification than munging.
+(defn -munge-query [[kw arg :as q]]
+  (-mandate-first q :query)
+  (-mandate-map arg)
+  (let [type (:type arg)]
+    (condp = type
+      :select (-munge-select-query arg)
+      :update (-munge-update-query arg)
+      :delete (-munge-delete-query arg)
+      :insert (-munge-insert-query arg)
+      (throw (Exception. (str "I don't recognise your query type: " type))))))
+
+(defn -munge-group-by [g]
+  (throw (Exception. "Group by clauses coming soon")))
+(defn -munge-having [h]
+  (throw (Exception. "Having clauses coming soon")))
+(defn -munge-window [w]
+  (throw (Exception. "Don't support window clauses yet")))
+
+;; Most people are familiar with limit/offset being integer constants
+;; but you can provide an arbitrary expression provided this resolves
+;; to an integer. We should probably do some further analysis to
+;; enforce at the very least not using logical ops unless there's
+;; a cast or something. Perhaps we should upgrade casts to be their
+;; own type. Cost would be more cases to handle.
+(defn -munge-limit [[kw expr :as l]]
+  (-mandate-first l :limit)
+  (if (u/is-integer? expr)
+    [:limit [:value expr]]
+    [:limit (-munge-expr expr)]))
+
+(defn -munge-offset [[kw expr :as o]]
+  (-mandate-first o :offset)
+  (if (u/is-integer? expr)
+    [:offset [:value expr]]
+    [:offset (-munge-expr expr)]))
+
+(defn -munge-for [f]
+  (throw (Exception. "Don't support for clauses yet")))
+(defn -munge-with [w]
+  (throw (Exception. "Don't support with modifiers yet")))
+;; Slightly verbose name, I'll grant. Refers to referencing with
+;; queries from a for clause
+(defn -munge-with-query-in-from [w]
+  (throw (Exception. "Don't support with-query FROM sources yet")))
+
+(defn munge-select-meta [maybe-meta]
+  (if (seq maybe-meta)
+    (let [meta (first maybe-meta)
+          distinct (:distinct meta)
+          on (:on meta)]
+      (if (not (nil? distinct))
+        (do (-mandate-bool distinct)
+            (if (seq on)
+              (let [expr (-munge-expr on)]
+                {:distinct distinct :on on})
+              {:distinct distinct}))
+        (do (when (seq on)
+              (throw (Exception. "You can't have an on clause on a select unless it's also distinct. SELECT DISTINCT ON...")))
+            {})))
+    {}))
 
 (defn munge-insert [i]
   (-mandate-vector i)
@@ -141,10 +229,13 @@
                  
                  
 (defn -munge-value [v]
-  (-mandate-vector v)
-  (-mandate-length v 2)
-  (-mandate-first v :value)
-  v)
+  (if (u/is-basic-value? v)
+    [:value v]
+    (do
+      (-mandate-vector v)
+      (-mandate-length v 2)
+      (-mandate-first v :value)
+      v)))
 
 (defn -munge-raw [r]
   (-mandate-vector r)
@@ -160,16 +251,18 @@
   p)
 
 (defn -munge-expr [a]
-  (-mandate-vector a)
-  (-mandate-min-length a 1)
-   (let [[head & tail] a]
-     (cond
-      (= head :placeholder) (-munge-placeholder a)
-      (= head :value) (-munge-value a)
-      (= head :identifier) (-munge-identifier a)
-      (= head :op) (-munge-op a)
-      (= head :raw) (-munge-raw a)
-      :default (u/unexpected-err a))))
+  (if (u/is-basic-value? a)
+    (-munge-value a)
+    (do (-mandate-vector a)
+        (-mandate-min-length a 1)
+        (let [[head & tail] a]
+          (cond
+           (= head :placeholder) (-munge-placeholder a)
+           (= head :value) (-munge-value a)
+           (= head :identifier) (-munge-identifier a)
+           (= head :op) (-munge-op a)
+           (= head :raw) (-munge-raw a)
+           :default (u/unexpected-err a))))))
 
 (defn -munge-set-atom [a]
   (cond
