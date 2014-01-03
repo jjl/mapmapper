@@ -43,10 +43,10 @@
 (defn from [query f]
   (assoc query :from (t/munge-from f)))
 
-(defn generate [query]
+(defn render [query]
   (let [type (:type query)]
-    (cond (= type :insert) (r/-render-insert query)
-          (= type :select) (r/-render-select query)
-          (= type :update) (r/-render-update query)
-          (= type :delete) (r/-render-delete query))))
+    (cond (= type :insert) (r/render-insert query)
+          (= type :select) (r/render-select query)
+          (= type :update) (r/render-update query)
+          (= type :delete) (r/render-delete query))))
 

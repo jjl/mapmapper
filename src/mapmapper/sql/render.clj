@@ -102,7 +102,7 @@
         pieces (map -render-set-expr fields)]
     (str "SET " (string/join ", " pieces))))
 
-(defn -render-insert [query]
+(defn render-insert [query]
   (let [cols (:cols query)
         table (:table query)
         q-cols (string/join ", "
@@ -115,10 +115,10 @@
                       table "(" q-cols ")"
                       "VALUES" "(" q-vals ")"])))
 
-(defn -render-select [query]
+(defn render-select [query]
   "not implemented")
 
-(defn -render-update [query]
+(defn render-update [query]
   (let [where (get query :where {})
         table (:table query)
         base-query (string/join " " ["UPDATE" table])
@@ -127,7 +127,7 @@
         base-set (string/join " " [base-query set-part])]
     (-maybe-where base-set query)))
 
-(defn -render-delete [query]
+(defn render-delete [query]
   (let [where (get query :where {})
         table (:table query)
         base-query (string/join " " ["DELETE FROM" table])]
