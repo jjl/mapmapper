@@ -1,7 +1,7 @@
 (ns mapmapper.sql.transform
   (require [mapmapper.util :as u]))
 
-(declare -munge-set-atom munge-from -munge-expr -munge-alias -munge-join -munge-query)
+(declare -munge-set-atom munge-from -munge-expr -munge-alias -munge-join -munge-query -munge-identifier -munge-raw)
 
 (defn veclike? [v]
   (or (vector? v)
@@ -92,8 +92,9 @@
   (let [meta (if (seq maybe-meta)
                (-munge-join-meta (first maybe-meta))
                {})]
+    ;; TODO: are laterals required to be aliased?
     (when (and (= t2type :lateral) (= (:type meta) :right))
-      (throw (Exception. "Laterals cannot be joined to by a right join. Syntactically it would be valid, but either it would break you query or you should use an ordinary subquery")))
+      (throw (Exception. "Laterals cannot be joined to by a right join. Syntactically it would be valid, but either it would break your query or you should use an ordinary subquery")))
     [:join (munge-from t1) (munge-from t2) meta]))
 
 (defn -munge-alias [[kw [type & rest :as item] alias :as input] context]
@@ -102,9 +103,8 @@
   (let [next (condp = context
                :from (condp = type
                        :table (-munge-table item)
-                       :join (-munge-join item)
                        :query (-munge-query item)
-;; http://www.postgresql.org/docs/9.3/static/queries-table-expressions.html#QUERIES-FROM
+                       :raw (-munge-raw item);; http://www.postgresql.org/docs/9.3/static/queries-table-expressions.html#QUERIES-FROM
                        :tablefunc (throw (Exception. "Don't support table function FROM sources yet"))
                        (u/unexpected-err item))
                :query (if (= type :query)
@@ -174,6 +174,23 @@
     [:offset [:value expr]]
     [:offset (-munge-expr expr)]))
 
+(defn munge-insert-fields [f]
+  (-mandate-vector f)
+  (map -munge-set-atom f))
+(defn munge-select-fields [f]
+  (-mandate-vector f)
+  (map (fn [field]
+         (if (u/is-string? field)
+           (-munge-identifier field)
+           (let [[type & args] field]
+             (condp = type
+               :identifier (-munge-identifier field)
+               :raw (-munge-raw field)
+               (u/unexpected-err field)))))
+       f))
+
+(defn munge-update-fields [f])
+
 (defn -munge-for [f]
   (throw (Exception. "Don't support for clauses yet")))
 (defn -munge-with [w]
@@ -198,10 +215,6 @@
               (throw (Exception. "You can't have an on clause on a select unless it's also distinct. SELECT DISTINCT ON...")))
             {})))
     {}))
-
-(defn munge-insert [i]
-  (-mandate-vector i)
-  (map -munge-set-atom i))
 
 (defn -munge-identifier [a]
   (cond

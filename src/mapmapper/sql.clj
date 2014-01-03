@@ -13,18 +13,16 @@
         new-aliases (assoc aliases next table)]
     [next new-aliases]))
 
-(defn insert [table cols]
+(defn insert [table]
   {:type :insert
-   :table table
-   :cols (t/munge-insert cols)})
+   :table table})
 
 (defn delete [table]
   {:type :delete
    :table table})
 
-(defn select [table & maybe-meta]
+(defn select [& maybe-meta]
   {:type :select
-   :table table
    :meta (t/munge-select-meta maybe-meta)})
 
 (defn update [table]
@@ -33,6 +31,14 @@
 
 (defn set [query fields]
   (assoc query :set (t/munge-set fields)))
+
+(defn fields [query fields]
+  (let [type (:type query)]
+    (condp = type
+      :insert (assoc query :fields (t/munge-insert-fields fields))
+      :select (assoc query :fields (t/munge-select-fields fields))
+      :update (assoc query :fields (t/munge-update-fields fields))
+      (throw (Exception. "Only insert, select and update can have fields")))))
 
 (def where-atom-types
   [:identifier :value :op])

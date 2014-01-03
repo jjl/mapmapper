@@ -3,26 +3,31 @@
             [mapmapper.sql :as s]))
 
 (deftest insert
-  (let [t1 (s/insert "foo" ["bar" "baz" "quux"])]
+  (let [t1 (s/fields (s/insert "foo") ["bar" "baz" "quux"])]
     (testing "map generation"
       (let [e1 {:type :insert :table "foo"
-                :cols [[[:identifier ["bar"]] [:placeholder]]
-                       [[:identifier ["baz"]] [:placeholder]]
-                       [[:identifier ["quux"]] [:placeholder]]]}]
+                :fields [[[:identifier ["bar"]] [:placeholder]]
+                         [[:identifier ["baz"]] [:placeholder]]
+                         [[:identifier ["quux"]] [:placeholder]]]}]
         (is (= t1 e1))))
     (testing "sql generation"
-      (let [s1 (s/generate t1)
+      (let [s1 (s/render t1)
             e1 "INSERT INTO foo ( \"bar\", \"baz\", \"quux\" ) VALUES ( ?, ?, ? )"]
         (is (= s1 e1))))))
 
 (deftest select
-  (let [t1 (s/select "foo")]
+  (let [t1 (-> (s/select "foo")
+               (s/from [[:table "foo"]])
+               (s/fields ["bar" "baz" "quux"]))]
     (testing "map generation"
-      (let [e1 {:type :select :table "foo" :meta {}}]
+      (let [e1 {:type :select :from [[:table "foo"]] :fields [[:identifier ["bar"]]
+                                                              [:identifier ["baz"]]
+                                                              [:identifier ["quux"]]]
+                :meta {}}]
         (is (= t1 e1))))
     (testing "sql generation"
-      (let [s1 (s/generate t1)
-            e1 "not implemented"]
+      (let [s1 (s/render t1)
+            e1 "SELECT \"bar\", \"baz\", \"quux\" FROM \"foo\""]
         (is (= s1 e1))))))
 
 (deftest update
@@ -53,10 +58,10 @@
         (is (= t1 e1))
         (is (= t2 e2))))
   (testing "sql generation"
-    (is (thrown-with-msg? Exception expected-vector (s/generate (s/update "foo"))))
-    (let [s1 (s/generate t1)
+    (is (thrown-with-msg? Exception expected-vector (s/render (s/update "foo"))))
+    (let [s1 (s/render t1)
           e1 "UPDATE foo SET \"bar\" = ?, \"baz\" = ?"
-          s2 (s/generate t2)
+          s2 (s/render t2)
           e2 "UPDATE foo SET \"bar\" = ?, \"baz\" = ? WHERE (true and (\"foo\".\"bar\" = false))"]
       (is (= s1 e1))
       (is (= s2 e2))))))
@@ -108,16 +113,16 @@
         (is (= t3 e3))
         (is (= t4 e4)))) ;; I think we've probably proven the point by now
     (testing "sql generation"
-      (let [s1 (s/generate t1)
-            s2 (s/generate t2)
-            s3 (s/generate t3)
-            s4 (s/generate t4)
-            s5 (s/generate t5)
-            s6 (s/generate t6)
-            s7 (s/generate t7)
-            s8 (s/generate t8)
-            s9 (s/generate t9)
-            s10 (s/generate t10)
+      (let [s1 (s/render t1)
+            s2 (s/render t2)
+            s3 (s/render t3)
+            s4 (s/render t4)
+            s5 (s/render t5)
+            s6 (s/render t6)
+            s7 (s/render t7)
+            s8 (s/render t8)
+            s9 (s/render t9)
+            s10 (s/render t10)
             e1 "DELETE FROM foo"
             e2 "DELETE FROM foo WHERE true"
             e3 "DELETE FROM foo WHERE (true and false)"

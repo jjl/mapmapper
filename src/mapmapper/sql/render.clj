@@ -3,7 +3,7 @@
             [mapmapper.sql.transform :as t]
             [clojure.string :as string]))
 
-(declare -render-expr)
+(declare -render-expr render)
 
 (def -default-forced-binops
   ["in" "not in"])
@@ -103,24 +103,84 @@
     (str "SET " (string/join ", " pieces))))
 
 (defn render-insert [query]
-  (let [cols (:cols query)
+  (let [fields (:fields query)
         table (:table query)
-        q-cols (string/join ", "
-                            (map (comp -render-identifier
-                                       first) cols))
+        q-fields (string/join ", "
+                              (map (comp -render-identifier
+                                         first) fields))
         q-vals (string/join ", "
                             (map (comp -render-expr
-                                       second) cols))]
+                                       second) fields))]
     (string/join " " ["INSERT INTO"
-                      table "(" q-cols ")"
+                      table "(" q-fields ")"
                       "VALUES" "(" q-vals ")"])))
 
+(defn -render-select-fields [f]
+  (string/join ", "
+               (map (fn [[type & rest :as input]]
+                      (condp = type
+                        :identifier (-render-identifier input)
+                        :raw (-render-raw input))) f)))
+
+(defn -render-table [[kw table]]
+  (str \" table \"))
+
+(defn -render-subquery [[kw q]]
+  (str "(" (render q) ")"))
+
+(defn -render-alias [[kw [atype & arest :as arg] alias :as input]]
+  (let [next (condp = atype
+               :table (-render-table arg)
+               :raw (-render-raw arg)
+               :query (-render-subquery arg)
+               (u/unexpected-err arg))]
+    (string/join " " [next "AS" alias])))
+
+(defn -render-join [[kw [t1type & t1args :as t1] [t2type & t2args :as t2] {:keys [type on] :as meta} :as input]]
+  (let [r-t1 (condp = t1type
+               :table (-render-table t1)
+               :join (throw (Exception. "The first argument to a join can't be another join. They flow RIGHTwards"))
+               :alias (-render-alias t1)
+               (u/unexpected-err t1))
+        r-t2 (condp = t2type
+               :table (-render-table t2)
+               :join (-render-join t2)
+               :alias (-render-alias t2)
+               (u/unexpected-err t2))
+        join-phrase (condp type =
+                 :left "LEFT JOIN"
+                 :right "RIGHT JOIN"
+                 :inner "INNER JOIN"
+                 :cross "CROSS JOIN")
+        on-phrase (when (seq on)
+                    (-render-op on))]
+    (if (= type :cross)
+      (string/join " " [r-t1 join-phrase r-t2])
+      (string/join " " [r-t1 join-phrase r-t2 "ON" on-phrase]))))
+
+    
+(defn -render-select-from [f]
+  (string/join ", "
+               (map (fn [[type & rest :as input]]
+                      (condp = type
+                        :table (-render-table input)
+                        :join (-render-join input)
+                        :alias (-render-alias input)
+                        ;; We don't support these yet
+                        ;; :lateral (u/unexpected-err input)
+                        ;; :tablefunc (u/unexpected-err input)
+                        (u/unexpected-err input))) f)))
+
 (defn render-select [query]
-  "not implemented")
+  (let [{:keys [fields from where]} query
+        s-fields (-render-select-fields fields)
+        s-from (-render-select-from from)
+        base-query (string/join " " ["SELECT" s-fields
+                                     "FROM" s-from])]
+    (-maybe-where base-query query)))
 
 (defn render-update [query]
-  (let [where (get query :where {})
-        table (:table query)
+  (let [{:keys [where table]} query
         base-query (string/join " " ["UPDATE" table])
         set (t/munge-set (:set query))
         set-part (-render-set (assoc query :set set))
@@ -128,8 +188,15 @@
     (-maybe-where base-set query)))
 
 (defn render-delete [query]
-  (let [where (get query :where {})
-        table (:table query)
+  (let [{:keys [where table]} query
         base-query (string/join " " ["DELETE FROM" table])]
     (-maybe-where base-query query)))
 
+(defn render [q]
+  (let [type (:type q)]
+    (condp type =
+      :select (render-select q)
+      :update (render-update q)
+      :insert (render-insert q)
+      :delete (render-delete q))))
+  
