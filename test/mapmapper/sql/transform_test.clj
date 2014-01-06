@@ -1,111 +1,113 @@
 (ns mapmapper.sql.transform_test
-  (:require [clojure.test :refer :all]
+  (:require [midje.sweet :refer :all]
             [mapmapper.sql.transform :as t]))
 
-(deftest utilities
-  (testing "veclike?"
-    (let [trues [[] '() (seq [1 2 3])]
-          falses [{} 1 "foo"]]
-      (is (every? true? (map t/veclike? trues)))
-      (is (every? (comp not true?) (map t/veclike? falses)))))
-  (testing "-mandate-vector")
-  (testing "-mandate-length")
-  (testing "-mandate-min-length")
-  (testing "-mandate-string")
-  (testing "-mandate-first"))
-(deftest munging
-  (testing "-munge-identifier"
-    (let [mapping [["foo" [:identifier ["foo"]]]
-                   [["foo" "bar"] [:identifier ["foo" "bar"]]]
-                   [[:identifier "foo"] [:identifier ["foo"]]]
-                   [[:identifier ["foo"]] [:identifier ["foo"]]]
-                   [[:identifier "foo" "bar"] [:identifier ["foo" "bar"]]]]
-          unex #"^Unexpected data:"
-          -mi t/-munge-identifier]
-      (is (every? (fn [[l r]]
-                    (= (-mi l) r)) mapping))
-      (is (thrown-with-msg? Exception unex (-mi [:identifier])))
-      (is (thrown-with-msg? Exception unex (-mi [:identifier 1])))
-      (is (thrown-with-msg? Exception unex (-mi [:identifier [1]])))
-      (is (thrown-with-msg? Exception unex (-mi [:identifier "foo" 1])))
-      (is (thrown-with-msg? Exception unex (-mi [:identifier {}])))
-      (is (thrown-with-msg? Exception unex (-mi [1])))
-      (is (thrown-with-msg? Exception unex (-mi [{}])))
-      (is (thrown-with-msg? Exception unex (-mi [])))))
-  (testing "-munge-value"
-    (let [invalid #"^Expected: :value, got:"
-          len #"^Expected collection of length:"
-          vec #"^Expected vector"
-          -mv t/-munge-value]
-      (is (thrown-with-msg? Exception len (-mv [])))
-      (is (thrown-with-msg? Exception len (-mv [:value])))
-      (is (thrown-with-msg? Exception invalid (-mv [:foo :bar])))
-      (is (thrown-with-msg? Exception vec (-mv {})))))
-  (testing "-munge-raw"
-    (let [len #"^Expected collection of length:"
-          vec #"^Expected vector"
-          raw #"^Expected: :raw, got: "
-          string #"^Expected string:"
-          -mr t/-munge-raw]
-
-      (is (thrown-with-msg? Exception vec (-mr {})))
-      (is (thrown-with-msg? Exception len (-mr [])))
-      (is (thrown-with-msg? Exception len (-mr [:foo])))
-      (is (thrown-with-msg? Exception string (-mr [:foo :bar])))
-      (is (thrown-with-msg? Exception raw (-mr [:foo "bar"])))
-      (is (thrown-with-msg? Exception string (-mr [:raw 1])))))
-  (testing "-munge-placeholder"
-    (let [inv #"^Expected: :placeholder, got:"
-          vec #"^Expected vector"
-          len #"^Expected collection of length:"
-          -mp t/-munge-placeholder]
-      (is (thrown-with-msg? Exception vec (-mp {})))
-      (is (thrown-with-msg? Exception len (-mp [])))
-      (is (thrown-with-msg? Exception len (-mp [:placeholder :foo])))
-      (is (thrown-with-msg? Exception inv (-mp [:foo])))))
-  (testing "-munge-expr"
-    (let [vec #"^Expected vector"
-          len #"^Expected collection of minimum length:"
-          unex #"^Unexpected data:"
-          -me t/-munge-expr]
-      (is (thrown-with-msg? Exception vec (-me {})))
-      (is (thrown-with-msg? Exception len (-me [])))
-      (is (thrown-with-msg? Exception unex (-me [:foo])))))
-  (testing "-munge-set-atom"
-    ;; It would be nice to tighten these up
-    (let [unex #"^Unexpected data:"
-          -msa t/-munge-set-atom
-          -mi t/-munge-identifier]
-      (is (thrown-with-msg? Exception unex (-msa {})))
-      (is (= (-mi "foo")
-             (first (-msa [:identifier "foo"]))))
-      (is (= (-mi "foo")
-             (first (-msa [["foo"] [:value 1]]))))
-      (is (= (-mi "foo")
-             (first (-msa "foo"))))))
-  (testing "munge-set"
-    (let [vec #"^Expected vector"
-          len #"^Expected collection of minimum length:"
-          ms t/munge-set]
-      (is (thrown-with-msg? Exception vec (ms {})))
-      (is (thrown-with-msg? Exception len (ms [])))))
-  (testing "-munge-alias")
-  (testing "-munge-join-meta")
-  (testing "-munge-join")
-  (testing "-munge-lateral")
-  (testing "-munge-table")
-  (testing "-munge-op")
-  (testing "-munge-group-by")
-  (testing "-munge-having")
-  (testing "-munge-window")
-  (testing "-munge-limit")
-  (testing "-munge-offset")
-  (testing "-munge-fetch")
-  (testing "-munge-for")
-  (testing "-munge-with")
-  (testing "munge-where")
-  (testing "munge-insert")
-  (testing "munge-fields")
-  ;; These could get rather long and tedious...
-  (testing "munge-from")
-  (testing "-munge-query"))
+(facts "utilities"
+       (fact "veclike?"
+             (let [trues [[] '() (seq [1 2 3])]
+                   falses [{} 1 "foo"]]
+               (map t/veclike? trues) => (has every? true?)
+               (map t/veclike? falses) => (has not-any? true?)))
+       (fact "-mandate-vector")
+       (fact "-mandate-length")
+       (fact "-mandate-min-length")
+       (fact "-mandate-string")
+       (fact "-mandate-first"))
+(facts "munging"
+       (fact "-munge-identifier"
+             (let [mapping [["foo" [:identifier ["foo"]]]
+                            [["foo" "bar"] [:identifier ["foo" "bar"]]]
+                            [[:identifier "foo"] [:identifier ["foo"]]]
+                            [[:identifier ["foo"]] [:identifier ["foo"]]]
+                            [[:identifier "foo" "bar"] [:identifier ["foo" "bar"]]]]
+                   unex #"^Unexpected data:"
+                   -mi t/-munge-identifier]
+               (map #(-mi (first %)) mapping) => (map second mapping)
+               (-mi [:identifier])            => (throws Exception unex)
+               (-mi [:identifier 1])          => (throws Exception unex)
+               (-mi [:identifier [1]])        => (throws Exception unex)
+               (-mi [:identifier "foo" 1])    => (throws Exception unex)
+               (-mi [:identifier {}])         => (throws Exception unex)
+               (-mi [1])                      => (throws Exception unex)
+               (-mi [{}])                     => (throws Exception unex)
+               (-mi [])                       => (throws Exception unex)))
+       (fact "-munge-value"
+             (let [invalid #"^Expected: :value, got:"
+                   len #"^Expected collection of length:"
+                   vec #"^Expected vector"
+                   -mv t/-munge-value]
+               (-mv [])          => (throws Exception len)
+               (-mv [:value])    => (throws Exception len)
+               (-mv [:foo :bar]) => (throws Exception invalid)
+               (-mv {}) => (throws Exception vec)))
+       (fact "-munge-raw"
+             (let [len #"^Expected collection of length:"
+                   vec #"^Expected vector"
+                   raw #"^Expected: :raw, got: "
+                   string #"^Expected string:"
+                   -mr t/-munge-raw]
+               (-mr {})           => (throws Exception vec)
+               (-mr [])           => (throws Exception len)
+               (-mr [:foo])       => (throws Exception len)
+               (-mr [:foo :bar])  => (throws Exception string)
+               (-mr [:foo "bar"]) => (throws Exception raw)
+               (-mr [:raw 1])     => (throws Exception string)))
+       (fact "-munge-placeholder"
+             (let [inv #"^Expected: :placeholder, got:"
+                   vec #"^Expected vector"
+                   len #"^Expected collection of length:"
+                   -mp t/-munge-placeholder]
+               (-mp {})                  => (throws Exception vec)
+               (-mp [])                  => (throws Exception len)
+               (-mp [:placeholder :foo]) => (throws Exception len)
+               (-mp [:foo])              => (throws Exception inv)))
+       (fact "-munge-expr"
+             (let [vec #"^Expected vector"
+                   len #"^Expected collection of minimum length:"
+                   unex #"^Unexpected data:"
+                   -me t/-munge-expr]
+               (-me {})     => (throws Exception vec)
+               (-me [])     => (throws Exception len)
+               (-me [:foo]) => (throws Exception unex)))
+       (fact "-munge-set-atom"
+             ;; It would be nice to tighten these up
+             (let [unex #"^Unexpected data:"
+                   -msa t/-munge-set-atom
+                   -mi t/-munge-identifier]
+               (-msa {})                           => (throws Exception unex)
+               (first (-msa [:identifier "foo"]))  => (-mi "foo")
+               (first (-msa [["foo"] [:value 1]])) => (-mi "foo")
+               (first (-msa "foo"))                => (-mi "foo")))
+       (fact "munge-set"
+             (let [vec #"^Expected vector"
+                   len #"^Expected collection of minimum length:"
+                   ms t/munge-set]
+               (ms {}) => (throws Exception vec)
+               (ms []) => (throws Exception len)))
+       (fact "-munge-alias"
+             (let [string #"^Expected string:"
+                   unex #"^Unexpected data:"
+                   tf "Don't support table function FROM sources yet"
+                   -ma t/-munge-alias]
+               (-ma [:alias [:foo] :bar] :from) => (throws Exception string)
+               (-ma [:alias [:tablefunc] "foo"] :from) => (throws Exception tf)))
+       (fact "-munge-join-meta")
+       (fact "-munge-join")
+       (fact "-munge-lateral")
+       (fact "-munge-table")
+       (fact "-munge-op")
+       (fact "-munge-group-by")
+       (fact "-munge-having")
+       (fact "-munge-window")
+       (fact "-munge-limit")
+       (fact "-munge-offset")
+       (fact "-munge-fetch")
+       (fact "-munge-for")
+       (fact "-munge-with")
+       (fact "munge-where")
+       (fact "munge-insert")
+       (fact "munge-fields")
+       ;; These could get rather long and tedious...
+       (fact "munge-from")
+       (fact "-munge-query"))
+        
