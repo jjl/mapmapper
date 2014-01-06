@@ -8,11 +8,49 @@
                    falses [{} 1 "foo"]]
                (map t/veclike? trues) => (has every? true?)
                (map t/veclike? falses) => (has not-any? true?)))
-       (fact "-mandate-vector")
-       (fact "-mandate-length")
-       (fact "-mandate-min-length")
-       (fact "-mandate-string")
-       (fact "-mandate-first"))
+       (fact "-mandate-vector"
+             (let [-mv t/-mandate-vector
+                   exp #"Expected vector:"]
+               (-mv {})          => (throws Exception exp)
+               (-mv #{})         => (throws Exception exp)
+               (-mv :a)          => (throws Exception exp)
+               (-mv 1)           => (throws Exception exp)
+               (-mv "a")         => (throws Exception exp)
+               (-mv [])          => nil?
+               (-mv '())         => nil?
+               (-mv (seq [1 2])) => nil?))
+       (fact "-mandate-length"
+             (let [-ml t/-mandate-length
+                   exp #"^Expected collection of length:"]
+               (-ml [] 0)    => nil?
+               (-ml [1] 1)   => nil?
+               (-ml [1 2] 2) => nil?
+               (-ml [] 1)    => (throws Exception exp)
+               (-ml [1 2] 1) => (throws Exception exp)
+               (-ml [1 2] 3) => (throws Exception exp)))
+       (fact "-mandate-min-length"
+             (let [-mml t/-mandate-min-length
+                   exp #"^Expected collection of minimum length:"]
+               (-mml [] 0)  => nil?
+               (-mml [1] 0) => nil?
+               (-mml [] 1)  => (throws Exception exp)))
+       (fact "-mandate-string"
+             (let [-ms t/-mandate-string
+                   exp #"^Expected string"]
+               (-ms "")  => nil?
+               (-ms [])  => (throws Exception exp)
+               (-ms 1)   => (throws Exception exp)
+               (-ms '()) => (throws Exception exp)))
+       (fact "-mandate-first"
+             (let [-mf t/-mandate-first
+                   exp #"^Expected:"]
+               (-mf [:a]  :a)  => nil?
+               (-mf [1]   1)   => nil?
+               (-mf ["a"] "a") => nil?
+               (-mf [] :a)     => (throws Exception exp)
+               (-mf ["a"] :a)  => (throws Exception exp)
+               (-mf [:a] :b)   => (throws Exception exp)
+               (-mf [1] 2)     => (throws Exception exp))))
 (facts "munging"
        (fact "-munge-identifier"
              (let [mapping [["foo" [:identifier ["foo"]]]
