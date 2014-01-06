@@ -104,9 +104,15 @@
                    len #"^Expected collection of minimum length:"
                    unex #"^Unexpected data:"
                    -me t/-munge-expr]
-               (-me {})     => (throws Exception vec)
-               (-me [])     => (throws Exception len)
-               (-me [:foo]) => (throws Exception unex)))
+               (-me 1)                                 => [:value 1]
+               (-me {})                                => (throws Exception vec)
+               (-me [])                                => (throws Exception len)
+               (-me [:foo])                            => (throws Exception unex)
+               (-me [:value "foo"])                    => [:value "foo"]
+               (-me [:placeholder])                    => [:placeholder]
+               (-me [:identifier "foo"])               => [:identifier ["foo"]]
+               (-me [:op "=" [[:value 1] [:value 2]]]) => [:op "=" [[:value 1] [:value 2]] {}]
+               (-me [:raw "foo"])                      => [:raw "foo"]))
        (fact "-munge-set-atom"
              ;; It would be nice to tighten these up
              (let [unex #"^Unexpected data:"
