@@ -142,7 +142,16 @@
                (-ma [:alias [:query {:type :select}] "foo"] :query) => [:alias [:query {:type :select}] "foo"]
                (-ma [:alias [:raw "foo"] "foo"] :query)   => (throws Exception unex)
                (-ma [:alias [:table "foo"] "foo"] :query) => (throws Exception unex)))
-       (fact "-munge-join-meta")
+       (fact "-munge-join-meta"
+             (let [-mjm t/-munge-join-meta
+                   cross "Cross joins cannot have conditions"
+                   cond #"joins require a condition"
+                   pres "Presumed you wanted an inner join since you didn't specify, but that requires a condition"]
+               (-mjm {:type :cross :on [1]}) => (throws Exception cross)
+               (-mjm {:type :left}) => (throws Exception cond)
+               (-mjm {}) => (throws Exception pres)
+               (-mjm {:type :cross}) => {:type :cross}
+               (-mjm {:type :left :on [:value true]}) => {:type :left :on [:value true]}))
        (fact "-munge-join")
        (fact "-munge-lateral")
        (fact "-munge-table")
