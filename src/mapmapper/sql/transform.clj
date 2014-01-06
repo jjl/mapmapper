@@ -141,13 +141,14 @@
 (defn -munge-query [[kw arg :as q]]
   (-mandate-first q :query)
   (-mandate-map arg)
-  (let [type (:type arg)]
-    (condp = type
-      :select (-munge-select-query arg)
-      :update (-munge-update-query arg)
-      :delete (-munge-delete-query arg)
-      :insert (-munge-insert-query arg)
-      (throw (Exception. (str "I don't recognise your query type: " type))))))
+  (let [type (:type arg)
+        next (condp = type
+               :select (-munge-select-query arg)
+               :update (-munge-update-query arg)
+               :delete (-munge-delete-query arg)
+               :insert (-munge-insert-query arg)
+               (throw (Exception. (str "I don't recognise your query type: " type))))]
+    [:query next]))
 
 (defn -munge-group-by [g]
   (throw (Exception. "Group by clauses coming soon")))

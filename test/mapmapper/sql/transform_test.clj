@@ -133,8 +133,15 @@
                    unex #"^Unexpected data:"
                    tf "Don't support table function FROM sources yet"
                    -ma t/-munge-alias]
-               (-ma [:alias [:foo] :bar] :from) => (throws Exception string)
-               (-ma [:alias [:tablefunc] "foo"] :from) => (throws Exception tf)))
+               (-ma [:alias [:foo] :bar] :from)           => (throws Exception string)
+               (-ma [:alias [:tablefunc] "foo"] :from)    => (throws Exception tf)
+               (-ma [:alias [:join] "foo"] :from)         => (throws Exception unex)
+               (-ma [:alias [:table "foo"] "foo"] :from)  => [:alias [:table "foo"] "foo"]
+               (-ma [:alias [:raw "foo"] "foo"] :from)    => [:alias [:raw "foo"] "foo"]
+               (-ma [:alias [:query {:type :select}] "foo"] :from)  => [:alias [:query {:type :select}] "foo"]
+               (-ma [:alias [:query {:type :select}] "foo"] :query) => [:alias [:query {:type :select}] "foo"]
+               (-ma [:alias [:raw "foo"] "foo"] :query)   => (throws Exception unex)
+               (-ma [:alias [:table "foo"] "foo"] :query) => (throws Exception unex)))
        (fact "-munge-join-meta")
        (fact "-munge-join")
        (fact "-munge-lateral")
