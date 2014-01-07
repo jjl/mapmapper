@@ -50,9 +50,5 @@
   (assoc query :from (t/munge-from f)))
 
 (defn render [query]
-  (let [type (:type query)]
-    (cond (= type :insert) (r/render-insert query)
-          (= type :select) (r/render-select query)
-          (= type :update) (r/render-update query)
-          (= type :delete) (r/render-delete query))))
+  (r/render query))
 

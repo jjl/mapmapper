@@ -120,7 +120,8 @@
                (map (fn [[type & rest :as input]]
                       (condp = type
                         :identifier (-render-identifier input)
-                        :raw (-render-raw input))) f)))
+                        :raw (-render-raw input)
+                        (u/unexpected-err f))) f)))
 
 (defn -render-table [[kw table]]
   (str \" table \"))
@@ -194,9 +195,10 @@
 
 (defn render [q]
   (let [type (:type q)]
-    (condp type =
+    (condp = type
       :select (render-select q)
       :update (render-update q)
       :insert (render-insert q)
-      :delete (render-delete q))))
+      :delete (render-delete q)
+      (u/unexpected-err q))))
   
