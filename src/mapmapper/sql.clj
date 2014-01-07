@@ -5,9 +5,6 @@
             [mapmapper.sql.render :as r])
   (:refer-clojure :except [set]))
 
-(declare -render-expr)
-
-
 (defn -alias-table [table aliases]
   (let [next (str "t" (-> aliases keys count))
         new-aliases (assoc aliases next table)]
@@ -39,9 +36,6 @@
       :select (assoc query :fields (t/munge-select-fields fields))
       :update (assoc query :fields (t/munge-update-fields fields))
       (throw (Exception. "Only insert, select and update can have fields")))))
-
-(def where-atom-types
-  [:identifier :value :op])
 
 (defn where [query w]
   (assoc query :where (t/munge-where w)))
