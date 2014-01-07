@@ -44,6 +44,8 @@
     (if (or (= :apply op)
             (= "apply" op))
       (let [[func fargs] args]
+        (-mandate-string func)
+        (-mandate-min-length fargs 1)
         [:op :apply [func (map -munge-expr fargs)] meta])
       [:op op (map -munge-expr args) meta])))
 
@@ -87,15 +89,12 @@
 ;; TODO:
 ;; - NATURAL JOIN
 ;; - USING (a,b,c)
-(defn -munge-join [[kw t1 [t2type & t2args :as t2] & maybe-meta :as input]]
+(defn -munge-join [[kw t1 [t2type & t2args :as t2] meta :as input]]
   (-mandate-first input :join)
-  (let [meta (if (seq maybe-meta)
-               (-munge-join-meta (first maybe-meta))
-               {})]
-    ;; TODO: are laterals required to be aliased?
-    (when (and (= t2type :lateral) (= (:type meta) :right))
-      (throw (Exception. "Laterals cannot be joined to by a right join. Syntactically it would be valid, but either it would break your query or you should use an ordinary subquery")))
-    [:join (munge-from t1) (munge-from t2) meta]))
+  ;; TODO: are laterals required to be aliased?
+  (when (and (= t2type :lateral) (= (:type meta) :right))
+    (throw (Exception. "Laterals cannot be joined to by a right join. Syntactically it would be valid, but either it would break your query or you should use an ordinary subquery")))
+    [:join (-munge-from-token t1) (-munge-from-token t2) (-munge-join-meta meta)])
 
 (defn -munge-alias [[kw [type & rest :as item] alias :as input] context]
   (-mandate-first input :alias)
@@ -113,20 +112,22 @@
                (throw (Exception. (str "Unknown alias context: " context))))]           
     [:alias next alias]))
 
+(defn -munge-from-token [[type & attrs :as f]]
+  (condp = type
+    :table (-munge-table f)
+    :join (-munge-join f)
+    :alias (-munge-alias f :from)
+    :lateral (-munge-lateral f)
+    ;; http://www.postgresql.org/docs/9.3/static/queries-table-expressions.html#QUERIES-FROM
+    :tablefunc (throw (Exception. "Don't support table function FROM sources yet"))
+    (u/unexpected-err f)))
+
 ;; This may have to be modified to support contexts since
 ;; Not everything should be permissible in e.g. an UPDATE
 ;; At least I think so, need to play around.
 (defn munge-from [f]
   (-mandate-vector f)
-  (map (fn [[type & attrs :as head]]
-         (condp = type
-          :table (-munge-table head)
-          :join (-munge-join head)
-          :alias (-munge-alias head :from)
-          :lateral (-munge-lateral head)
-;; http://www.postgresql.org/docs/9.3/static/queries-table-expressions.html#QUERIES-FROM
-          :tablefunc (throw (Exception. "Don't support table function FROM sources yet"))
-          (u/unexpected-err head))) f))
+  (map -munge-from-token f))
 
 ;; FIXME. One of the things we can do here is check that 
 ;; the user hasn't added types of clause that are unfit for the
@@ -301,3 +302,5 @@
   (-mandate-min-length s 1)
   (map -munge-set-atom s))
 
+(defn -munge-fetch [f]
+  (throw (Exception. "Don't support FETCH yet")))

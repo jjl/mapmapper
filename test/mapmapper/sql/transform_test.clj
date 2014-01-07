@@ -152,21 +152,96 @@
                (-mjm {}) => (throws Exception pres)
                (-mjm {:type :cross}) => {:type :cross}
                (-mjm {:type :left :on [:value true]}) => {:type :left :on [:value true]}))
-       (fact "-munge-join")
-       (fact "-munge-lateral")
-       (fact "-munge-table")
-       (fact "-munge-op")
-       (fact "-munge-group-by")
-       (fact "-munge-having")
-       (fact "-munge-window")
-       (fact "-munge-limit")
-       (fact "-munge-offset")
-       (fact "-munge-fetch")
-       (fact "-munge-for")
-       (fact "-munge-with")
-       (fact "munge-where")
-       (fact "munge-insert")
-       (fact "munge-fields")
+       (fact "-munge-join"
+             (let [-mj t/-munge-join]
+               (-mj [:join [:table "foo"] [:table "bar"] {:on [:value true]}])
+               => [:join [:table "foo"] [:table "bar"] {:type :inner :on [:value true]}]))
+       (fact "-munge-lateral"
+             (let [-ml t/-munge-lateral
+                   alias "LATERAL subqueries MUST be aliased"]
+               (-ml [:lateral [:alias [:query {:type :select}] "bar"]]) => [:lateral [:alias [:query {:type :select}] "bar"]]
+               (-ml [:lateral [:query {:type :select}]]) => (throws Exception alias)
+               (-ml [:lateral [:table "foo"]]) => (throws Exception alias)
+               (-ml [:lateral [:raw "foo"]]) => (throws Exception alias)))
+       (fact "-munge-table"
+             (let [-mt t/-munge-table
+                   string #"Expected string:"]
+               (-mt [:table "foo"]) => [:table "foo"]
+               (-mt [:table {}]) => (throws Exception string)
+               (-mt [:table []]) => (throws Exception string)
+               (-mt [:table 1]) => (throws Exception string)
+               (-mt [:table #{}]) => (throws Exception string)))
+       (fact "-munge-op"
+             (let [-mo t/-munge-op
+                   exp "Your operator must be either a string or :apply"
+                   min #"Expected collection of minimum length:"
+                   string #"Expected string"
+                   vec #"Expected vector:"]
+               (-mo [:op :apply ["foo" [[:value "bar"]]]]) => [:op :apply ["foo" [[:value "bar"]]] {}]
+               (-mo [:op "foo" [[:value "bar"] [:value "baz"]]]) => [:op "foo" [[:value "bar"] [:value "baz"]] {}]
+               (-mo [:op :foo []]) => (throws Exception exp)
+               (-mo [:op {} []]) => (throws Exception exp)
+               (-mo [:op 1 []]) => (throws Exception exp)
+               (-mo [:op [] []]) => (throws Exception exp)
+               (-mo [:op :apply {}]) => (throws Exception vec)
+               (-mo [:op :apply #{}]) => (throws Exception vec)
+               (-mo [:op :apply :bar]) => (throws Exception vec)
+               (-mo [:op :apply "bar"]) => (throws Exception vec)
+               (-mo [:op :apply 123]) => (throws Exception vec)
+               (-mo [:op :apply [[]]]) => (throws Exception string)
+               (-mo [:op :apply ["foo"]]) => (throws Exception min)))
+       (fact "-munge-group-by"
+             (t/-munge-group-by :foo) => (throws Exception "Group by clauses coming soon"))
+       (fact "-munge-having"
+             (t/-munge-having :foo) => (throws Exception "Having clauses coming soon"))
+       (fact "-munge-window"
+             (t/-munge-window :foo) => (throws Exception "Don't support window clauses yet"))
+       (fact "-munge-limit"
+             (let [-ml t/-munge-limit
+                   vec #"Expected vector:"]
+               (-ml [:limit 1]) => [:limit [:value 1]]
+               (-ml [:limit :foo]) => (throws Exception vec)
+               (-ml [:limit [:value 3]]) => [:limit [:value 3]]
+               (-ml [:limit [:op "+" [[:value 1] [:value 1]]]]) => [:limit [:op "+" [[:value 1] [:value 1]] {}]]))
+       (fact "-munge-offset"
+             (let [-mo t/-munge-offset
+                   vec #"Expected vector:"]
+               (-mo [:offset 1]) => [:offset [:value 1]]
+               (-mo [:offset :foo]) => (throws Exception vec)
+               (-mo [:offset [:value 3]]) => [:offset [:value 3]]
+               (-mo [:offset [:op "+" [[:value 1] [:value 1]]]]) => [:offset [:op "+" [[:value 1] [:value 1]] {}]]))
+       (fact "-munge-fetch"
+             (t/-munge-fetch :foo) => (throws Exception "Don't support FETCH yet"))
+       (fact "-munge-for"
+             (t/-munge-for :foo) => (throws Exception "Don't support for clauses yet"))
+       (fact "-munge-with"
+             (t/-munge-with :foo) => (throws Exception "Don't support with modifiers yet"))
+       (fact "munge-where"
+             (let [mw t/munge-where]
+               ;; Basically, we just want to check it falls through to -munge-expr
+               (mw [:value true]) => [:value true]
+               (mw "foo") => [:value "foo"]))
+       (fact "munge-insert-fields"
+             (let [unex #"^Unexpected data:"
+                   mif t/munge-insert-fields
+                   -mi t/-munge-identifier]
+               ;; Basically, we're testing it falls through to -munge-set-atom
+               (mif {})                           => (throws Exception unex)
+               (first (mif [:identifier "foo"]))  => (-mi "foo")
+               (first (mif [["foo"] [:value 1]])) => (-mi "foo")
+               (first (mif "foo"))                => (-mi "foo")))
+       (fact "munge-select-fields"
+             (let [msf t/munge-select-fields
+                   vec #"Expected vector:"
+                   unex #"Unexpected data:"]
+               (msf :foo) => (throws Exception vec)
+               (msf ["foo"]) => [[:identifier ["foo"]]]
+               (msf [[:identifier "bar"]]) => [[:identifier ["bar"]]]
+               (msf [[:raw "foo"]]) => [[:raw "foo"]]
+               (msf [[:query {}]]) => (throws Exception unex)))
+       (fact "munge-update-fields")
+       (fact "munge-select-meta")
+       (fact "-munge-with-query-in-from")
        ;; These could get rather long and tedious...
        (fact "munge-from")
        (fact "-munge-query"))
