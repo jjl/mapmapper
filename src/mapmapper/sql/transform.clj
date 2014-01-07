@@ -29,6 +29,10 @@
   (when-not (= (first a) b)
     (throw (Exception. (str "Expected: " b ", got: " (first a))))))
 
+(defn -mandate-key [a b c]
+  (when-not (= (get a b) c)
+    (throw (Exception. (str "Expected " b " to be: " c)))))
+
 (defn munge-where [w]
   (-munge-expr w))
 
@@ -45,8 +49,9 @@
             (= "apply" op))
       (let [[func fargs] args]
         (-mandate-string func)
-        (-mandate-min-length fargs 1)
-        [:op :apply [func (map -munge-expr fargs)] meta])
+        (if (seq fargs)
+          [:op :apply [func (map -munge-expr fargs)] meta]
+          [:op :apply [func]]))
       [:op op (map -munge-expr args) meta])))
 
 ;; [:table name]
@@ -112,15 +117,18 @@
                (throw (Exception. (str "Unknown alias context: " context))))]           
     [:alias next alias]))
 
-(defn -munge-from-token [[type & attrs :as f]]
-  (condp = type
-    :table (-munge-table f)
-    :join (-munge-join f)
-    :alias (-munge-alias f :from)
-    :lateral (-munge-lateral f)
-    ;; http://www.postgresql.org/docs/9.3/static/queries-table-expressions.html#QUERIES-FROM
-    :tablefunc (throw (Exception. "Don't support table function FROM sources yet"))
-    (u/unexpected-err f)))
+(defn -munge-from-token [f]
+  (if (u/is-basic-value? f)
+    (-munge-table [:table f])
+    (let [[type & rest] f]
+      (condp = type
+        :table (-munge-table f)
+        :join (-munge-join f)
+        :alias (-munge-alias f :from)
+        :lateral (-munge-lateral f)
+        ;; http://www.postgresql.org/docs/9.3/static/queries-table-expressions.html#QUERIES-FROM
+        :tablefunc (throw (Exception. "Don't support table function FROM sources yet"))
+        (u/unexpected-err f)))))
 
 ;; This may have to be modified to support contexts since
 ;; Not everything should be permissible in e.g. an UPDATE
@@ -132,10 +140,26 @@
 ;; FIXME. One of the things we can do here is check that 
 ;; the user hasn't added types of clause that are unfit for the
 ;; desired query type
-(defn -munge-select-query [q] q)
-(defn -munge-update-query [q] q)
-(defn -munge-delete-query [q] q)
-(defn -munge-insert-query [q] q)
+(defn -munge-select-query [q]
+  (-mandate-key q :type :select)
+  (let [fields (:fields q)
+        from (:from q)
+        where (:where q)
+        having (:having q)
+        groupby (:groupby q)]
+    (when-not (seq fields)
+      (throw (Exception. "SELECT queries must have fields to select")))
+  q))
+
+(defn -munge-update-query [q]
+  (-mandate-key q :type :update)
+  q)
+(defn -munge-delete-query [q]
+  (-mandate-key q :type :delete)
+ q)
+(defn -munge-insert-query [q]
+  (-mandate-key q :type :insert)
+ q)
 
 ;; [:query {}]
 ;; Realistically this is more verification than munging.
@@ -187,11 +211,14 @@
            (let [[type & args] field]
              (condp = type
                :identifier (-munge-identifier field)
+               :op (-munge-op field)
                :raw (-munge-raw field)
                (u/unexpected-err field)))))
        f))
 
-(defn munge-update-fields [f])
+(defn munge-update-fields [f]
+  (-mandate-vector f)
+  (map -munge-identifier f))
 
 (defn -munge-for [f]
   (throw (Exception. "Don't support for clauses yet")))
@@ -211,7 +238,7 @@
         (do (-mandate-bool distinct)
             (if (seq on)
               (let [expr (-munge-expr on)]
-                {:distinct distinct :on on})
+                {:distinct distinct :on expr})
               {:distinct distinct}))
         (do (when (seq on)
               (throw (Exception. "You can't have an on clause on a select unless it's also distinct. SELECT DISTINCT ON...")))

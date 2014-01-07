@@ -51,7 +51,7 @@
                (-mf ["a"] :a)  => (throws Exception exp)
                (-mf [:a] :b)   => (throws Exception exp)
                (-mf [1] 2)     => (throws Exception exp))))
-(facts "munging"
+(facts "munging 1"
        (fact "-munge-identifier"
              (let [mapping [["foo" [:identifier ["foo"]]]
                             [["foo" "bar"] [:identifier ["foo" "bar"]]]
@@ -138,8 +138,8 @@
                (-ma [:alias [:join] "foo"] :from)         => (throws Exception unex)
                (-ma [:alias [:table "foo"] "foo"] :from)  => [:alias [:table "foo"] "foo"]
                (-ma [:alias [:raw "foo"] "foo"] :from)    => [:alias [:raw "foo"] "foo"]
-               (-ma [:alias [:query {:type :select}] "foo"] :from)  => [:alias [:query {:type :select}] "foo"]
-               (-ma [:alias [:query {:type :select}] "foo"] :query) => [:alias [:query {:type :select}] "foo"]
+               (-ma [:alias [:query {:type :select :fields [[:table "bar"]]}] "foo"] :from)  => [:alias [:query {:type :select :fields [[:table "bar"]]}] "foo"]
+               (-ma [:alias [:query {:type :select :fields [[:table "bar"]]}] "foo"] :query) => [:alias [:query {:type :select :fields [[:table "bar"]]}] "foo"]
                (-ma [:alias [:raw "foo"] "foo"] :query)   => (throws Exception unex)
                (-ma [:alias [:table "foo"] "foo"] :query) => (throws Exception unex)))
        (fact "-munge-join-meta"
@@ -159,17 +159,17 @@
        (fact "-munge-lateral"
              (let [-ml t/-munge-lateral
                    alias "LATERAL subqueries MUST be aliased"]
-               (-ml [:lateral [:alias [:query {:type :select}] "bar"]]) => [:lateral [:alias [:query {:type :select}] "bar"]]
+               (-ml [:lateral [:alias [:query {:type :select :fields [[:table "foo"]]}] "bar"]]) => [:lateral [:alias [:query {:type :select :fields [[:table "foo"]]}] "bar"]]
                (-ml [:lateral [:query {:type :select}]]) => (throws Exception alias)
-               (-ml [:lateral [:table "foo"]]) => (throws Exception alias)
-               (-ml [:lateral [:raw "foo"]]) => (throws Exception alias)))
+               (-ml [:lateral [:table "foo"]])           => (throws Exception alias)
+               (-ml [:lateral [:raw "foo"]])             => (throws Exception alias)))
        (fact "-munge-table"
              (let [-mt t/-munge-table
                    string #"Expected string:"]
                (-mt [:table "foo"]) => [:table "foo"]
-               (-mt [:table {}]) => (throws Exception string)
-               (-mt [:table []]) => (throws Exception string)
-               (-mt [:table 1]) => (throws Exception string)
+               (-mt [:table {}])  => (throws Exception string)
+               (-mt [:table []])  => (throws Exception string)
+               (-mt [:table 1])   => (throws Exception string)
                (-mt [:table #{}]) => (throws Exception string)))
        (fact "-munge-op"
              (let [-mo t/-munge-op
@@ -177,19 +177,19 @@
                    min #"Expected collection of minimum length:"
                    string #"Expected string"
                    vec #"Expected vector:"]
+               (-mo [:op :apply ["foo"]]) => [:op :apply ["foo"]]
                (-mo [:op :apply ["foo" [[:value "bar"]]]]) => [:op :apply ["foo" [[:value "bar"]]] {}]
                (-mo [:op "foo" [[:value "bar"] [:value "baz"]]]) => [:op "foo" [[:value "bar"] [:value "baz"]] {}]
-               (-mo [:op :foo []]) => (throws Exception exp)
-               (-mo [:op {} []]) => (throws Exception exp)
-               (-mo [:op 1 []]) => (throws Exception exp)
-               (-mo [:op [] []]) => (throws Exception exp)
-               (-mo [:op :apply {}]) => (throws Exception vec)
-               (-mo [:op :apply #{}]) => (throws Exception vec)
-               (-mo [:op :apply :bar]) => (throws Exception vec)
-               (-mo [:op :apply "bar"]) => (throws Exception vec)
-               (-mo [:op :apply 123]) => (throws Exception vec)
-               (-mo [:op :apply [[]]]) => (throws Exception string)
-               (-mo [:op :apply ["foo"]]) => (throws Exception min)))
+               (-mo [:op :foo []])        => (throws Exception exp)
+               (-mo [:op {} []])          => (throws Exception exp)
+               (-mo [:op 1 []])           => (throws Exception exp)
+               (-mo [:op [] []])          => (throws Exception exp)
+               (-mo [:op :apply {}])      => (throws Exception vec)
+               (-mo [:op :apply #{}])     => (throws Exception vec)
+               (-mo [:op :apply :bar])    => (throws Exception vec)
+               (-mo [:op :apply "bar"])   => (throws Exception vec)
+               (-mo [:op :apply 123])     => (throws Exception vec)
+               (-mo [:op :apply [[]]])    => (throws Exception string)))
        (fact "-munge-group-by"
              (t/-munge-group-by :foo) => (throws Exception "Group by clauses coming soon"))
        (fact "-munge-having"
@@ -199,8 +199,8 @@
        (fact "-munge-limit"
              (let [-ml t/-munge-limit
                    vec #"Expected vector:"]
-               (-ml [:limit 1]) => [:limit [:value 1]]
-               (-ml [:limit :foo]) => (throws Exception vec)
+               (-ml [:limit 1])          => [:limit [:value 1]]
+               (-ml [:limit :foo])       => (throws Exception vec)
                (-ml [:limit [:value 3]]) => [:limit [:value 3]]
                (-ml [:limit [:op "+" [[:value 1] [:value 1]]]]) => [:limit [:op "+" [[:value 1] [:value 1]] {}]]))
        (fact "-munge-offset"
@@ -223,13 +223,16 @@
                (mw "foo") => [:value "foo"]))
        (fact "munge-insert-fields"
              (let [unex #"^Unexpected data:"
+                   vec #"^Expected vector:"
                    mif t/munge-insert-fields
                    -mi t/-munge-identifier]
-               ;; Basically, we're testing it falls through to -munge-set-atom
-               (mif {})                           => (throws Exception unex)
-               (first (mif [:identifier "foo"]))  => (-mi "foo")
-               (first (mif [["foo"] [:value 1]])) => (-mi "foo")
-               (first (mif "foo"))                => (-mi "foo")))
+               ;; Basically, we're testing it maps over -munge-set-atom
+               (mif {})                           => (throws Exception vec)
+               (mif [{}])                         => (throws Exception unex)
+               (first (first (mif [[:identifier "foo"]])))  => (-mi "foo")
+               (first (first (mif [[["foo"] [:value 1]]]))) => (-mi "foo")
+               (first (first (mif ["foo"])))                => (-mi "foo"))))
+(facts "munging 2"
        (fact "munge-select-fields"
              (let [msf t/munge-select-fields
                    vec #"Expected vector:"
@@ -238,11 +241,74 @@
                (msf ["foo"]) => [[:identifier ["foo"]]]
                (msf [[:identifier "bar"]]) => [[:identifier ["bar"]]]
                (msf [[:raw "foo"]]) => [[:raw "foo"]]
+               (msf [[:op "apply" ["now"]]]) => [[:op :apply ["now"]]]
                (msf [[:query {}]]) => (throws Exception unex)))
-       (fact "munge-update-fields")
-       (fact "munge-select-meta")
-       (fact "-munge-with-query-in-from")
-       ;; These could get rather long and tedious...
-       (fact "munge-from")
-       (fact "-munge-query"))
+       (fact "munge-update-fields"
+             (let [muf t/munge-update-fields
+                   mapping [["foo" [:identifier ["foo"]]]
+                            [["foo" "bar"] [:identifier ["foo" "bar"]]]
+                            [[:identifier "foo"] [:identifier ["foo"]]]
+                            [[:identifier ["foo"]] [:identifier ["foo"]]]
+                            [[:identifier "foo" "bar"] [:identifier ["foo" "bar"]]]]
+                   -mi t/-munge-identifier]
+               ;; It should be mapping over -munge-identifier
+               (map #(muf [(first %)]) mapping) => (map (comp list second) mapping)))
+       (fact "munge-select-meta"
+             (let [msm t/munge-select-meta
+                   bool #"Expected boolean:"
+                   ondis "You can't have an on clause on a select unless it's also distinct. SELECT DISTINCT ON..."]
+               ;; This takes a list of up to one item
+               (msm [])                 => {}
+               (msm [{:on [1]}])        => (throws Exception ondis)
+               (msm [{:distinct 1}])    => (throws Exception bool)
+                    
+               (msm [{:distinct true}]) => {:distinct true}
+               (msm [{:distinct true :on [:identifier "foo"]}]) => {:distinct true :on [:identifier ["foo"]]}))
+       (fact "-munge-with-query-in-from"
+             (t/-munge-with-query-in-from :foo) => (throws Exception "Don't support with-query FROM sources yet"))
+       (fact "-munge-from-token"
+             (let [-mft t/-munge-from-token
+                   unex #"^Unexpected data:"]
+               (-mft [:table "foo"]) => [:table "foo"]
+               (-mft [:join [:table "foo"] [:table "bar"] {:type :cross}]) => [:join [:table "foo"] [:table "bar"] {:type :cross}]
+               (-mft [:alias [:table "foo"] "bar"]) => [:alias [:table "foo"] "bar"]
+               (-mft [:lateral [:alias [:query {:type :select :fields [[:table "bar"]]}] "foo"]]) => [:lateral [:alias [:query {:type :select :fields [[:table "bar"]]}] "foo"]]
+               (-mft "foo") => [:table "foo"]
+               (-mft [:query {}]) => (throws Exception unex)))
+       (fact "munge-from"
+             (let [mf t/munge-from
+                   vec #"^Expected vector:"
+                   unex #"^Unexpected data:"]
+               (mf :foo) => (throws Exception vec)
+               (mf [[:query {}]])                   => (throws Exception unex)
+               (mf ["foo"])                         => [[:table "foo"]]
+               (mf [[:table "foo"]])                => [[:table "foo"]]
+               (mf [[:alias [:table "foo"] "bar"]]) => [[:alias [:table "foo"] "bar"]]
+               (mf [[:join [:table "foo"] [:table "bar"] {:type :cross}]]) => [[:join [:table "foo"] [:table "bar"] {:type :cross}]]
+               (mf [[:lateral [:alias [:query {:type :select :fields [[:table "bar"]]}] "foo"]]])   => [[:lateral [:alias [:query {:type :select :fields [[:table "bar"]]}] "foo"]]]))
+       (fact "-munge-select-query"
+             (let [-msq t/-munge-select-query
+                   exp #"Expected .+ to be:"]
+               (-msq {:type :update}) => (throws Exception exp)))
+       (fact "-munge-insert-query"
+             (let [-miq t/-munge-insert-query
+                   exp #"Expected .+ to be:"]
+               (-miq {:type :update}) => (throws Exception exp)))
+       (fact "-munge-update-query"
+             (let [-muq t/-munge-update-query
+                   exp #"Expected .+ to be:"]
+               (-muq {:type :select :fields [[:table "foo"]]}) => (throws Exception exp)))
+       (fact "-munge-delete-query"
+             (let [-mdq t/-munge-delete-query
+                   exp #"Expected .+ to be:"]
+               (-mdq {:type :update}) => (throws Exception exp)))
+       (fact "-munge-query"
+             (let [-mq t/-munge-query
+                   unk #"I don't recognise your query type"]
+               ;; We're checking that it delegates to the right function
+               (-mq [:query {:type :foo}])    => (throws Exception unk)
+               (-mq [:query {:type :select :fields [[:table "foo"]]}]) => [:query {:type :select :fields [[:table "foo"]]}]
+               (-mq [:query {:type :update}]) => [:query {:type :update}]
+               (-mq [:query {:type :insert}]) => [:query {:type :insert}]
+               (-mq [:query {:type :delete}]) => [:query {:type :delete}])))
         
