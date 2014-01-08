@@ -50,7 +50,19 @@
                (-mf [] :a)     => (throws Exception exp)
                (-mf ["a"] :a)  => (throws Exception exp)
                (-mf [:a] :b)   => (throws Exception exp)
-               (-mf [1] 2)     => (throws Exception exp))))
+               (-mf [1] 2)     => (throws Exception exp)))
+       (fact "-mandate-key"
+             (let [-mk t/-mandate-key
+                   exp #"^Expected .+ to be:"]
+               (-mk {:foo 1} :foo 1) => nil?
+               (-mk {:foo :bar} :foo :bar) => nil?
+               (-mk {:foo "bar"} :foo "bar") => nil?
+               (-mk {:foo 1} :foo 2) => (throws Exception exp)
+               (-mk {:foo :bar} :foo :baz) => (throws Exception exp)
+               (-mk {:foo "bar"} :foo "baz") => (throws Exception exp)
+               (-mk {:foo :bar} :foo 1) => (throws Exception exp)
+               (-mk {} :foo nil) => nil?
+               (-mk {:foo :bar :baz :quux} :foo :bar) => nil?)))
 (facts "munging 1"
        (fact "-munge-identifier"
              (let [mapping [["foo" [:identifier ["foo"]]]
