@@ -1,7 +1,15 @@
 TODO
 ====
 
-* SQL generation. Big time
+* Munging
+  * GROUP BY
+  * HAVING
+* SQL generation
+  * SELECT
+  * FROM
+  * WHERE
+  * GROUP BY
+  * HAVING
 * Tests for SQL generation
 * -munge-{select,update,insert,delete}-query don't do terribly much right nown
 * Tests for -munge-{select,update,insert,delete}-query
