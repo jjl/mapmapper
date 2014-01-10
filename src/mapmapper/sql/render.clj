@@ -148,11 +148,13 @@
                :join (-render-join t2)
                :alias (-render-alias t2)
                (u/unexpected-err t2))
-        join-phrase (condp type =
+        join-phrase (condp = type
                  :left "LEFT JOIN"
                  :right "RIGHT JOIN"
                  :inner "INNER JOIN"
-                 :cross "CROSS JOIN")
+                 :cross "CROSS JOIN"
+                 nil nil
+                 (u/unexpected-err type))
         on-phrase (when (seq on)
                     (-render-op on))]
     (if (= type :cross)
@@ -172,11 +174,23 @@
                         ;; :tablefunc (u/unexpected-err input)
                         (u/unexpected-err input))) f)))
 
+(defn -select-maybe-distinct [query]
+  (let [distinct (:distinct query)
+        on (:on query)]
+    (if distinct
+      (if on
+        (string/join " " ["SELECT DISTINCT ON ("
+                          (string/join ", " (map -render-expr on))
+                          ")"])
+        "SELECT DISTINCT")
+      "SELECT")))
+
 (defn render-select [query]
   (let [{:keys [fields from where]} query
         s-fields (-render-select-fields fields)
         s-from (-render-select-from from)
-        base-query (string/join " " ["SELECT" s-fields
+        distinct (-select-maybe-distinct query)
+        base-query (string/join " " [distinct s-fields
                                      "FROM" s-from])]
     (-maybe-where base-query query)))
 
