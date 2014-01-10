@@ -3,7 +3,7 @@
             [mapmapper.sql.transform :as t]
             [clojure.string :as string]))
 
-(declare -render-expr render)
+(declare -render-expr -render-table -render-alias render)
 
 (def -default-forced-binops
   ["in" "not in"])
