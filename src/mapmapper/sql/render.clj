@@ -84,13 +84,14 @@
   (str arg))
 
 (defn -render-expr [[head & tail :as expr]]
-  (cond
-   (= head :raw) (-render-raw expr)
-   (= head :identifier) (-render-identifier expr)
-   (= head :value) (-render-value expr)
-   (= head :op) (-render-op expr)
-   (= head :placeholder) (-render-placeholder)
-   :default (u/unexpected-err expr)))
+  (condp = head
+   :raw (-render-raw expr)
+   :identifier (-render-identifier expr)
+   :value (-render-value expr)
+   :op (-render-op expr)
+   :placeholder (-render-placeholder)
+   :table (-render-table expr)
+   (u/unexpected-err expr)))
 
 (defn -render-set-expr [[l r]]
   (let [left (-render-identifier l)
@@ -121,6 +122,7 @@
                       (condp = type
                         :identifier (-render-identifier input)
                         :raw (-render-raw input)
+                        :alias (-render-alias input)
                         (u/unexpected-err f))) f)))
 
 (defn -render-table [[kw table]]
@@ -130,12 +132,8 @@
   (str "(" (render q) ")"))
 
 (defn -render-alias [[kw [atype & arest :as arg] alias :as input]]
-  (let [next (condp = atype
-               :table (-render-table arg)
-               :raw (-render-raw arg)
-               :query (-render-subquery arg)
-               (u/unexpected-err arg))]
-    (string/join " " [next "AS" alias])))
+  (let [next (-render-expr arg)]
+    (string/join "" [next " AS \"" alias \"])))
 
 (defn -render-join [[kw [t1type & t1args :as t1] [t2type & t2args :as t2] {:keys [type on] :as meta} :as input]]
   (let [r-t1 (condp = t1type
@@ -185,14 +183,21 @@
         "SELECT DISTINCT")
       "SELECT")))
 
+(defn -maybe-from [base query]
+  (let [from (:from query)]
+    (if from
+      (string/join " " [base "FROM" (-render-select-from from)])
+      base)))
+
 (defn render-select [query]
   (let [{:keys [fields from where]} query
         s-fields (-render-select-fields fields)
-        s-from (-render-select-from from)
         distinct (-select-maybe-distinct query)
-        base-query (string/join " " [distinct s-fields
-                                     "FROM" s-from])]
-    (-maybe-where base-query query)))
+        base-query (string/join " " [distinct s-fields])]
+    (-> base-query
+        (-maybe-from query)
+        (-maybe-where query))))
+
 
 (defn render-update [query]
   (let [{:keys [where table]} query
