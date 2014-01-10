@@ -1,7 +1,7 @@
 (ns mapmapper.sql.transform
   (require [mapmapper.util :as u]))
 
-(declare -munge-set-atom munge-from -munge-expr -munge-alias -munge-join -munge-query -munge-identifier -munge-raw)
+(declare -munge-set-atom munge-from -munge-expr -munge-alias -munge-join -munge-query -munge-identifier -munge-raw -munge-from-token)
 
 (defn veclike? [v]
   (or (vector? v)
@@ -203,6 +203,7 @@
 (defn munge-insert-fields [f]
   (-mandate-vector f)
   (map -munge-set-atom f))
+
 (defn munge-select-fields [f]
   (-mandate-vector f)
   (map (fn [field]
